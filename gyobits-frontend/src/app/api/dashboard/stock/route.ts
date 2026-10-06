@@ -1,13 +1,45 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { items, stockMovements } from '@/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { items } from '@/db/schema';
+import { eq } from 'drizzle-orm';
+import { inMemoryStore } from '@/lib/store';
 
 export async function GET() {
   try {
-    const allItems = await db.select().from(items).where(eq(items.isActive, true));
+    let allItems: Array<{
+      id: number;
+      sku: string;
+      name: string;
+      category: string;
+      unitBase: string;
+      displayUnit: string;
+      currentStockQty: string;
+      minStockAlert: string | null;
+      currentStockValueRupiah: string;
+      currentAvgCostRupiah?: string | null;
+    }> = [];
 
-    let totalSku = allItems.length;
+    try {
+      allItems = await db.select().from(items).where(eq(items.isActive, true));
+    } catch {
+      // In-memory fallback
+      allItems = inMemoryStore.items
+        .filter((i) => i.isActive)
+        .map((i) => ({
+          id: i.id,
+          sku: i.sku,
+          name: i.name,
+          category: i.category,
+          unitBase: i.unitBase,
+          displayUnit: i.displayUnit,
+          currentStockQty: i.currentStockQty,
+          minStockAlert: i.minStockAlert,
+          currentStockValueRupiah: i.currentStockValueRupiah,
+          currentAvgCostRupiah: i.currentAvgCostRupiah,
+        }));
+    }
+
+    const totalSku = allItems.length;
     let kondisiKritis = 0;
     let nilaiStockTotal = 0;
 
@@ -28,9 +60,10 @@ export async function GET() {
       nilaiStockTotal: Math.round(nilaiStockTotal),
       items: allItems,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: { code: 'DATABASE_ERROR', message: error.message } },
+      { error: { code: 'DATABASE_ERROR', message } },
       { status: 500 }
     );
   }

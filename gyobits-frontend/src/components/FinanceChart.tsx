@@ -24,7 +24,15 @@ ChartJS.register(
   Filler
 );
 
-export default function FinanceChart() {
+interface FinanceChartProps {
+  chartData?: {
+    labels: string[];
+    pendapatan: number[];
+    pengeluaran: number[];
+  };
+}
+
+export default function FinanceChart({ chartData }: FinanceChartProps) {
   const options = {
     responsive: true,
     maintainAspectRatio: false,
@@ -45,12 +53,17 @@ export default function FinanceChart() {
       tooltip: {
         mode: 'index' as const,
         intersect: false,
+        callbacks: {
+          label: (context: { dataset: { label?: string }; parsed: { y: number | null } }) => {
+            const val = context.parsed.y ?? 0;
+            return `${context.dataset.label || ''}: Rp ${val.toLocaleString('id-ID')}`;
+          }
+        }
       },
     },
     scales: {
       y: {
         beginAtZero: true,
-        suggestedMax: 100000,
         grid: {
           color: '#DBD2C7',
           drawBorder: false,
@@ -58,8 +71,12 @@ export default function FinanceChart() {
         ticks: {
           font: { family: 'monospace', size: 11 },
           color: '#908B85',
-          callback: (value: number | string) => `Rp ${value}`,
-          stepSize: 50000,
+          callback: (value: number | string) => {
+            const num = Number(value);
+            if (num >= 1000000) return `Rp ${(num / 1000000).toFixed(1)}jt`;
+            if (num >= 1000) return `Rp ${(num / 1000).toFixed(0)}rb`;
+            return `Rp ${num}`;
+          },
         },
         border: { dash: [4, 4] }
       },
@@ -81,28 +98,38 @@ export default function FinanceChart() {
     }
   };
 
-  const labels = ['01 Okt', '02 Okt', '03 Okt', '04 Okt', '05 Okt'];
+  const labels = chartData?.labels && chartData.labels.length > 0
+    ? chartData.labels
+    : ['01 Okt', '02 Okt', '03 Okt', '04 Okt', '05 Okt', '06 Okt'];
+
+  const pendapatanValues = chartData?.pendapatan ?? [0, 0, 0, 0, 0, 0];
+  const pengeluaranValues = chartData?.pengeluaran ?? [0, 0, 0, 0, 0, 0];
+
+  const totalPendapatan = pendapatanValues.reduce((a, b) => a + b, 0);
+  const totalPengeluaran = pengeluaranValues.reduce((a, b) => a + b, 0);
 
   const data = {
     labels,
     datasets: [
       {
-        label: 'Pendapatan Rp 0',
-        data: [0, 0, 0, 0, 0],
+        label: `Pendapatan (Total Rp ${totalPendapatan.toLocaleString('id-ID')})`,
+        data: pendapatanValues,
         borderColor: '#3D6B50',
         backgroundColor: '#3D6B50',
         borderWidth: 2,
-        pointRadius: 0,
-        tension: 0.1
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        tension: 0.2
       },
       {
-        label: 'Pengeluaran Rp 0',
-        data: [0, 0, 0, 0, 0],
+        label: `Pengeluaran (Total Rp ${totalPengeluaran.toLocaleString('id-ID')})`,
+        data: pengeluaranValues,
         borderColor: '#B8962E',
         backgroundColor: '#B8962E',
         borderWidth: 2,
-        pointRadius: 0,
-        tension: 0.1
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        tension: 0.2
       }
     ]
   };

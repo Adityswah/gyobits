@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { Cloud, CloudOff, Search, Plus, Minus, Trash2, Truck, CreditCard, Banknote, ShoppingCart, Image as ImageIcon, X, History, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Cloud, CloudOff, Search, Plus, Minus, Trash2, Truck, ShoppingCart, Image as ImageIcon, X, History, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { api, SaleSyncPayload } from '@/lib/api';
 
 interface Variant {
   id: string;
@@ -16,7 +17,6 @@ interface MenuItem {
   variants?: Variant[];
 }
 
-// Mock Data
 const MENU_CATEGORIES = ['Semua', 'Gyoza', 'Minuman', 'Ekstra'];
 
 const GYOZA_VARIANTS: Variant[] = [
@@ -26,12 +26,12 @@ const GYOZA_VARIANTS: Variant[] = [
   { id: 'v4', name: 'Mix' },
 ];
 
-const MOCK_ITEMS: MenuItem[] = [
-  { id: 1, name: 'Gyoza Isi 10', price: 35000, category: 'Gyoza', image: '/images/gyoza-10.jpg', variants: GYOZA_VARIANTS },
-  { id: 2, name: 'Gyoza Isi 8', price: 28000, category: 'Gyoza', image: '/images/gyoza-8.jpg', variants: GYOZA_VARIANTS },
-  { id: 3, name: 'Gyoza Isi 7', price: 25000, category: 'Gyoza', image: '/images/gyoza-7.jpg', variants: GYOZA_VARIANTS },
-  { id: 4, name: 'Es Teh Manis', price: 5000, category: 'Minuman', image: '/images/es-teh.jpg' },
-  { id: 5, name: 'Chili Oil Ekstra', price: 3000, category: 'Ekstra', image: '/images/chili-oil.jpg' },
+const DEFAULT_ITEMS: MenuItem[] = [
+  { id: 8, name: 'Gyoza Isi 10', price: 35000, category: 'Gyoza', image: '/images/gyoza-10.jpg', variants: GYOZA_VARIANTS },
+  { id: 9, name: 'Gyoza Isi 8', price: 28000, category: 'Gyoza', image: '/images/gyoza-8.jpg', variants: GYOZA_VARIANTS },
+  { id: 10, name: 'Gyoza Isi 7', price: 25000, category: 'Gyoza', image: '/images/gyoza-7.jpg', variants: GYOZA_VARIANTS },
+  { id: 11, name: 'Es Teh Manis', price: 5000, category: 'Minuman', image: '/images/es-teh.jpg' },
+  { id: 12, name: 'Chili Oil Ekstra', price: 3000, category: 'Ekstra', image: '/images/chili-oil.jpg' },
 ];
 
 const CUSTOMER_SOURCES = ['Offline', 'WhatsApp', 'X (Twitter)', 'Threads', 'Lainnya'];
@@ -45,16 +45,20 @@ interface CartItem {
 
 interface OutboxTransaction {
   id: string;
+  offlineInvoiceId: string;
   waktu: string;
   total: number;
   itemsCount: number;
   status: 'PENDING' | 'SYNCED';
+  payload: SaleSyncPayload;
 }
 
 export default function POSPage() {
-  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [isOnline, setIsOnline] = useState(true);
   const [activeCategory, setActiveCategory] = useState('Semua');
   const [search, setSearch] = useState('');
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(DEFAULT_ITEMS);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   // Cart State
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -69,11 +73,34 @@ export default function POSPage() {
   const [showShiftModal, setShowShiftModal] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
-  // Outbox / Offline Queue State
-  const [outbox, setOutbox] = useState<OutboxTransaction[]>([
-    { id: 'OFF-7F1C2A', waktu: '11:42', total: 60000, itemsCount: 2, status: 'PENDING' },
-    { id: 'OFF-3AB910', waktu: '11:55', total: 35000, itemsCount: 1, status: 'PENDING' },
-  ]);
+  // Outbox / Offline Queue State with lazy initialization from localStorage
+  const [outbox, setOutbox] = useState<OutboxTransaction[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('stokara_pos_outbox');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch {
+          // ignore
+        }
+      }
+    }
+    return [
+      {
+        id: 'OFF-7F1C2A',
+        offlineInvoiceId: '7f1c2a00-0000-4000-8000-000000000001',
+        waktu: '11:42',
+        total: 60000,
+        itemsCount: 2,
+        status: 'SYNCED',
+        payload: {
+          offline_invoice_id: '7f1c2a00-0000-4000-8000-000000000001',
+          payment_method: 'CASH',
+          items: [{ line_type: 'MENU', qty: 2, unit_price: 30000, item_name: 'Gyoza Isi 8' }]
+        }
+      }
+    ];
+  });
 
   // Shift State
   const [shiftOpen, setShiftOpen] = useState(true);
@@ -83,6 +110,48 @@ export default function POSPage() {
     setSuccessToast(msg);
     setTimeout(() => setSuccessToast(null), 3000);
   };
+
+  useEffect(() => {
+    let active = true;
+    api.items.getAll()
+      .then((res) => {
+        if (!active || !res.data) return;
+        const sellable = res.data.filter((i) => {
+          const price = Number(i.sellPriceRupiah || 0);
+          return i.category === 'FINISHED' || price > 0;
+        });
+
+        if (sellable.length > 0) {
+          const mapped: MenuItem[] = sellable.map((i) => {
+            let cat = 'Gyoza';
+            if (i.name.toLowerCase().includes('teh') || i.name.toLowerCase().includes('kopi')) cat = 'Minuman';
+            else if (i.name.toLowerCase().includes('chili') || i.name.toLowerCase().includes('saus')) cat = 'Ekstra';
+
+            return {
+              id: i.id,
+              name: i.name,
+              price: Number(i.sellPriceRupiah) || 25000,
+              category: cat,
+              image: '/images/gyoza-10.jpg',
+              variants: i.name.toLowerCase().includes('gyoza') ? GYOZA_VARIANTS : undefined,
+            };
+          });
+          setMenuItems(mapped);
+        }
+      })
+      .catch((err) => {
+        console.warn('Using default menu items:', err);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Save outbox to localStorage on change
+  useEffect(() => {
+    localStorage.setItem('stokara_pos_outbox', JSON.stringify(outbox));
+  }, [outbox]);
 
   // Network listener
   useEffect(() => {
@@ -96,7 +165,7 @@ export default function POSPage() {
     };
   }, []);
 
-  const filteredItems = MOCK_ITEMS.filter(item => {
+  const filteredItems = menuItems.filter(item => {
     const matchCat = activeCategory === 'Semua' || item.category === activeCategory;
     const matchSearch = item.name.toLowerCase().includes(search.toLowerCase());
     return matchCat && matchSearch;
@@ -141,25 +210,92 @@ export default function POSPage() {
   const subtotal = cart.reduce((acc, i) => acc + (i.item.price * i.qty), 0);
   const total = subtotal + shippingCost - discount;
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (cart.length === 0) return;
+
+    const invoiceUuid = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `inv-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+    const shortId = `OFF-${invoiceUuid.slice(-6).toUpperCase()}`;
+
+    const payload: SaleSyncPayload = {
+      offline_invoice_id: invoiceUuid,
+      device_id: 'DEVICE-POS-01',
+      device_created_at: new Date().toISOString(),
+      payment_method: paymentMethod,
+      payment_channel: paymentMethod,
+      shipping_cost: Number(shippingCost) || 0,
+      discount: Number(discount) || 0,
+      items: cart.map(c => ({
+        line_type: 'MENU',
+        item_id: c.item.id,
+        item_name: c.selectedVariant ? `${c.item.name} (${c.selectedVariant.name})` : c.item.name,
+        qty: c.qty,
+        unit_price: c.item.price,
+        variant_name: c.selectedVariant?.name,
+      })),
+    };
+
+    let status: 'PENDING' | 'SYNCED' = 'PENDING';
+
+    if (isOnline) {
+      try {
+        await api.sales.sync(payload);
+        status = 'SYNCED';
+        showNotification(`Transaksi berhasil diproses & sinkron ke backend (${shortId})!`);
+      } catch (err) {
+        console.warn('Sync failed, queued locally:', err);
+        status = 'PENDING';
+        showNotification(`Tersimpan ke antrean offline (${shortId}).`);
+      }
+    } else {
+      showNotification(`Transaksi disimpan offline (${shortId}).`);
+    }
+
     const newTx: OutboxTransaction = {
-      id: `OFF-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
+      id: shortId,
+      offlineInvoiceId: invoiceUuid,
       waktu: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
       total: total,
       itemsCount: cart.reduce((a, c) => a + c.qty, 0),
-      status: isOnline ? 'SYNCED' : 'PENDING'
+      status,
+      payload,
     };
 
     setOutbox(prev => [newTx, ...prev]);
     setCart([]);
     setShippingCost(0);
-    showNotification(`Transaksi berhasil disimpan (${newTx.id})!`);
   };
 
-  const handleSyncAll = () => {
-    setOutbox(prev => prev.map(tx => ({ ...tx, status: 'SYNCED' })));
-    showNotification("Semua transaksi antrean berhasil disinkronkan ke server!");
+  const handleSyncAll = async () => {
+    const pending = outbox.filter(t => t.status === 'PENDING');
+    if (pending.length === 0) {
+      showNotification("Tidak ada transaksi antrean yang perlu disinkronkan.");
+      return;
+    }
+
+    setIsSyncing(true);
+    let successCount = 0;
+
+    const updatedOutbox = [...outbox];
+
+    for (const tx of pending) {
+      try {
+        await api.sales.sync(tx.payload);
+        const index = updatedOutbox.findIndex(o => o.id === tx.id);
+        if (index !== -1) {
+          updatedOutbox[index] = { ...updatedOutbox[index], status: 'SYNCED' };
+        }
+        successCount++;
+      } catch (err) {
+        console.error(`Failed to sync ${tx.id}:`, err);
+      }
+    }
+
+    setOutbox(updatedOutbox);
+    setIsSyncing(false);
+    showNotification(`${successCount} dari ${pending.length} transaksi antrean berhasil disinkronkan!`);
   };
 
   return (
@@ -248,7 +384,7 @@ export default function POSPage() {
               className={`px-4 py-2 rounded-lg text-sm font-bold min-w-max transition-colors target-touch ${
                 activeCategory === cat 
                   ? 'bg-gold text-white shadow-sm' 
-                  : 'bg-white border border-line text-side-text hover:bg-stat'
+                  : 'bg-white border border-line text-ink hover:bg-bg'
               }`}
             >
               {cat}
@@ -256,79 +392,97 @@ export default function POSPage() {
           ))}
         </div>
 
-        {/* Items Grid */}
-        <div className="flex-1 overflow-y-auto p-4 bg-bg">
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredItems.map(item => (
-              <button
-                key={item.id}
-                onClick={() => handleProductClick(item)}
-                className="bg-white border border-line rounded-xl overflow-hidden flex flex-col hover:border-gold hover:shadow-sm transition-all active:scale-95 target-touch text-left group"
-              >
-                <div className="w-full h-32 bg-stat border-b border-line flex items-center justify-center relative overflow-hidden text-side-text group-hover:opacity-90">
-                  <div className="flex flex-col items-center opacity-40">
-                    <ImageIcon size={32} />
-                    <span className="text-[10px] mt-2 font-mono">{item.image}</span>
-                  </div>
-                </div>
-                
-                <div className="p-3 w-full">
-                  <h3 className="text-sm font-bold text-ink mb-1 line-clamp-2">{item.name}</h3>
-                  <p className="text-gold font-mono font-bold text-sm">Rp {item.price.toLocaleString('id-ID')}</p>
-                </div>
-              </button>
-            ))}
-            {filteredItems.length === 0 && (
-              <div className="col-span-full py-10 text-center text-side-text">
-                Menu tidak ditemukan
+        {/* Product Grid */}
+        <div className="flex-1 p-4 overflow-y-auto grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 bg-bg">
+          {filteredItems.map(item => (
+            <div 
+              key={item.id}
+              onClick={() => handleProductClick(item)}
+              className="bg-card border border-line rounded-xl p-3 flex flex-col justify-between hover:border-gold transition-all cursor-pointer shadow-xs group target-touch"
+            >
+              <div className="w-full aspect-video bg-stat rounded-lg mb-3 flex items-center justify-center text-side-text group-hover:bg-gold-soft/50 transition-colors">
+                <ImageIcon size={32} className="opacity-40" />
               </div>
-            )}
-          </div>
+              <div>
+                <span className="text-[10px] font-bold text-side-text uppercase tracking-wider">{item.category}</span>
+                <h3 className="font-bold text-ink text-sm line-clamp-1">{item.name}</h3>
+                <div className="font-mono font-bold text-green mt-1 text-sm">
+                  Rp {item.price.toLocaleString('id-ID')}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
+
       </div>
 
-      {/* RIGHT: CART */}
-      <div className="w-[380px] shrink-0 bg-card rounded-[14px] border border-line shadow-sm flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-line bg-stat">
-          <h2 className="font-serif font-bold text-lg text-ink flex justify-between items-center">
-            Keranjang
-            <span className="bg-ink text-white text-xs px-2 py-1 rounded-full font-sans">
-              {cart.reduce((a,c) => a + c.qty, 0)} item
-            </span>
-          </h2>
+      {/* RIGHT: CART & CHECKOUT PANEL */}
+      <div className="w-96 flex flex-col bg-card rounded-[14px] border border-line shadow-sm overflow-hidden shrink-0">
+        <div className="p-4 border-b border-line bg-stat flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <ShoppingCart size={18} className="text-gold" />
+            <h2 className="font-serif font-bold text-base text-ink">Keranjang Pesanan</h2>
+          </div>
+          <span className="text-xs text-side-text font-mono font-bold">
+            {cart.reduce((a, c) => a + c.qty, 0)} item
+          </span>
         </div>
 
-        {/* Cart Items */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-bg">
+        {/* Customer Source Selection */}
+        <div className="px-4 py-2.5 border-b border-line bg-bg flex items-center justify-between">
+          <span className="text-xs text-side-text font-bold uppercase">Sumber Transaksi</span>
+          <select 
+            value={customerSource} 
+            onChange={(e) => setCustomerSource(e.target.value)}
+            className="bg-card border border-line rounded px-2 py-1 text-xs text-ink outline-none cursor-pointer"
+          >
+            {CUSTOMER_SOURCES.map(src => (
+              <option key={src} value={src}>{src}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Cart Items List */}
+        <div className="flex-1 p-4 overflow-y-auto divide-y divide-line">
           {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-side-text space-y-2 opacity-50">
-              <ShoppingCart size={48} />
-              <p>Keranjang masih kosong</p>
+            <div className="h-full flex flex-col items-center justify-center text-side-text gap-2">
+              <ShoppingCart size={32} className="opacity-30" />
+              <p className="text-xs">Keranjang masih kosong</p>
             </div>
           ) : (
             cart.map(c => (
-              <div key={c.id} className="bg-white border border-line rounded-lg p-3 flex gap-3 items-center">
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-bold text-ink truncate">{c.item.name}</h4>
+              <div key={c.id} className="py-3 flex justify-between items-center first:pt-0 last:pb-0">
+                <div className="flex-1 pr-2">
+                  <div className="font-bold text-xs text-ink leading-tight">{c.item.name}</div>
                   {c.selectedVariant && (
-                    <span className="inline-block px-2 py-0.5 bg-gold-soft text-gold text-[10px] font-bold rounded mt-1 uppercase tracking-wider">
-                      {c.selectedVariant.name}
-                    </span>
+                    <div className="text-[10px] text-gold font-bold">Varian: {c.selectedVariant.name}</div>
                   )}
-                  <p className="text-gold font-mono text-xs font-bold mt-1">Rp {c.item.price.toLocaleString('id-ID')}</p>
+                  <div className="font-mono text-xs text-side-text mt-0.5">
+                    Rp {c.item.price.toLocaleString('id-ID')}
+                  </div>
                 </div>
+
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center border border-line rounded-lg overflow-hidden h-9">
-                    <button onClick={() => updateQty(c.id, -1)} className="w-9 h-full flex items-center justify-center bg-stat hover:bg-line text-ink target-touch">
+                  <div className="flex items-center border border-line rounded-lg bg-bg overflow-hidden">
+                    <button 
+                      onClick={() => updateQty(c.id, -1)}
+                      className="p-1 hover:bg-line text-ink target-touch"
+                    >
                       <Minus size={14} />
                     </button>
-                    <span className="w-8 text-center text-sm font-bold text-ink">{c.qty}</span>
-                    <button onClick={() => updateQty(c.id, 1)} className="w-9 h-full flex items-center justify-center bg-stat hover:bg-line text-ink target-touch">
+                    <span className="px-2 font-mono text-xs font-bold text-ink">{c.qty}</span>
+                    <button 
+                      onClick={() => updateQty(c.id, 1)}
+                      className="p-1 hover:bg-line text-ink target-touch"
+                    >
                       <Plus size={14} />
                     </button>
                   </div>
-                  <button onClick={() => removeCartItem(c.id)} className="text-red/50 hover:text-red p-2 target-touch">
-                    <Trash2 size={16} />
+                  <button 
+                    onClick={() => removeCartItem(c.id)}
+                    className="p-1 text-red/60 hover:text-red hover:bg-red/10 rounded target-touch"
+                  >
+                    <Trash2 size={14} />
                   </button>
                 </div>
               </div>
@@ -336,189 +490,182 @@ export default function POSPage() {
           )}
         </div>
 
-        {/* Calculations & Payment */}
-        <div className="border-t border-line p-4 bg-white space-y-4">
-          
-          {/* Customer Source Section */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-side-text uppercase tracking-wider">Sumber Pelanggan</label>
-            <select 
-              value={customerSource}
-              onChange={(e) => setCustomerSource(e.target.value)}
-              className="w-full bg-stat border border-line rounded-lg px-3 py-2.5 text-sm font-bold text-ink outline-none focus:border-gold"
-            >
-              {CUSTOMER_SOURCES.map(source => (
-                <option key={source} value={source}>{source}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="h-px bg-line w-full" />
-
-          <div className="space-y-2 text-sm">
+        {/* Billing & Payment Section */}
+        <div className="p-4 border-t border-line bg-stat flex flex-col gap-3">
+          <div className="space-y-1.5 text-xs">
             <div className="flex justify-between text-side-text">
-              <span>Subtotal</span>
-              <span className="font-mono text-ink font-bold">Rp {subtotal.toLocaleString('id-ID')}</span>
+              <span>Subtotal Menu</span>
+              <span className="font-mono text-ink">Rp {subtotal.toLocaleString('id-ID')}</span>
             </div>
             
             <div className="flex justify-between items-center text-side-text">
-              <div className="flex items-center gap-2 cursor-pointer hover:text-ink" onClick={() => setShippingCost(shippingCost === 0 ? 10000 : 0)}>
-                <Truck size={14} />
-                <span>Ongkir (Opsional)</span>
-              </div>
-              <span className="font-mono text-ink font-bold">Rp {shippingCost.toLocaleString('id-ID')}</span>
+              <span className="flex items-center gap-1"><Truck size={12} /> Ongkir</span>
+              <input 
+                type="number" 
+                value={shippingCost || ''}
+                placeholder="0"
+                onChange={(e) => setShippingCost(Number(e.target.value))}
+                className="w-20 bg-white border border-line rounded px-1.5 py-0.5 text-right font-mono text-ink text-xs outline-none focus:border-gold"
+              />
+            </div>
+
+            <div className="flex justify-between font-bold text-sm text-ink pt-2 border-t border-line">
+              <span>Total Tagihan</span>
+              <span className="font-mono text-base text-green">Rp {total.toLocaleString('id-ID')}</span>
             </div>
           </div>
 
-          <div className="h-px bg-line w-full" />
-
-          <div className="flex justify-between items-end">
-            <span className="text-sm font-bold text-ink">Total Tagihan</span>
-            <span className="text-2xl font-mono font-bold text-green">Rp {total.toLocaleString('id-ID')}</span>
-          </div>
-
-          {/* Payment Methods */}
-          <div className="grid grid-cols-2 gap-2 pt-2">
-            <button 
+          {/* Payment Method Selector */}
+          <div className="grid grid-cols-2 gap-2 mt-1">
+            <button
               onClick={() => setPaymentMethod('CASH')}
-              className={`flex items-center justify-center gap-2 py-3 rounded-xl border-2 transition-all target-touch ${paymentMethod === 'CASH' ? 'border-gold bg-gold-soft text-gold font-bold' : 'border-line text-side-text hover:bg-stat'}`}
+              className={`py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all target-touch ${
+                paymentMethod === 'CASH'
+                  ? 'border-gold bg-gold-soft text-gold shadow-xs'
+                  : 'border-line bg-white text-ink hover:bg-bg'
+              }`}
             >
-              <Banknote size={18} />
-              CASH
+              CASH (Tunai)
             </button>
-            <button 
+            <button
               onClick={() => setPaymentMethod('BANK')}
-              className={`flex items-center justify-center gap-2 py-3 rounded-xl border-2 transition-all target-touch ${paymentMethod === 'BANK' ? 'border-gold bg-gold-soft text-gold font-bold' : 'border-line text-side-text hover:bg-stat'}`}
+              className={`py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all target-touch ${
+                paymentMethod === 'BANK'
+                  ? 'border-gold bg-gold-soft text-gold shadow-xs'
+                  : 'border-line bg-white text-ink hover:bg-bg'
+              }`}
             >
-              <CreditCard size={18} />
-              BANK
+              BANK / QRIS
             </button>
           </div>
 
-          {/* Checkout Button */}
+          {/* Primary Action Button */}
           <button 
-            disabled={cart.length === 0}
             onClick={handleCheckout}
-            className={`w-full py-4 rounded-xl text-white font-bold text-lg flex items-center justify-center gap-2 target-touch transition-transform active:scale-[0.98] ${
-              cart.length === 0 ? 'bg-line cursor-not-allowed' : 'bg-gold hover:bg-[#A38225]'
+            disabled={cart.length === 0}
+            className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all shadow-md target-touch ${
+              cart.length > 0 
+                ? 'bg-gold hover:bg-[#A38225] text-white' 
+                : 'bg-line text-side-text cursor-not-allowed'
             }`}
           >
-            BAYAR SEKARANG
+            Bayar & Simpan Pesanan (Rp {total.toLocaleString('id-ID')})
           </button>
         </div>
       </div>
 
-      {/* MODAL: SINKRONISASI OFFLINE POS (PRD 5.7 & 10.7) */}
+      {/* OUTBOX / SYNC QUEUE MODAL */}
       {showOutboxModal && (
         <div className="fixed inset-0 bg-ink/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white border border-line rounded-2xl w-full max-w-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95">
             <div className="p-4 border-b border-line bg-stat flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-green' : 'bg-red'}`} />
-                <h3 className="font-serif font-bold text-lg text-ink">Sinkronisasi Offline POS</h3>
+              <div>
+                <h3 className="font-serif font-bold text-lg text-ink">Antrean Transaksi POS</h3>
+                <p className="text-xs text-side-text">Daftar transaksi tersimpan di memori terminal</p>
               </div>
-              <button onClick={() => setShowOutboxModal(false)} className="text-side-text hover:text-ink"><X size={18} /></button>
+              <button onClick={() => setShowOutboxModal(false)} className="p-1 hover:bg-line rounded-full text-side-text">
+                <X size={18} />
+              </button>
             </div>
-            
-            <div className="p-5 space-y-4">
-              <div className="text-xs text-side-text">
-                Daftar transaksi yang disimpan lokal di IndexedDB perangkat saat offline:
-              </div>
 
-              <div className="border border-line rounded-xl overflow-hidden divide-y divide-line text-xs">
-                {outbox.map((tx) => (
-                  <div key={tx.id} className="p-3 flex justify-between items-center bg-bg">
+            <div className="p-4 max-h-80 overflow-y-auto space-y-2">
+              {outbox.length === 0 ? (
+                <div className="text-center py-8 text-side-text text-xs">Belum ada antrean transaksi</div>
+              ) : (
+                outbox.map(tx => (
+                  <div key={tx.id} className="p-3 bg-stat border border-line rounded-xl flex justify-between items-center text-xs">
                     <div>
-                      <div className="font-bold font-mono text-ink">{tx.id}</div>
-                      <div className="text-[10px] text-side-text">{tx.waktu} · {tx.itemsCount} item</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-ink">{tx.id}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          tx.status === 'SYNCED' ? 'bg-green/10 text-green' : 'bg-red/10 text-red'
+                        }`}>
+                          {tx.status}
+                        </span>
+                      </div>
+                      <div className="text-side-text text-[11px] mt-0.5">{tx.waktu} · {tx.itemsCount} Menu item</div>
                     </div>
-                    <div className="text-right">
-                      <div className="font-mono font-bold text-ink">Rp {tx.total.toLocaleString('id-ID')}</div>
-                      <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold ${
-                        tx.status === 'SYNCED' ? 'bg-green/10 text-green' : 'bg-gold-soft text-gold'
-                      }`}>
-                        {tx.status}
-                      </span>
+                    <div className="font-mono font-bold text-sm text-ink">
+                      Rp {tx.total.toLocaleString('id-ID')}
                     </div>
                   </div>
-                ))}
-              </div>
+                ))
+              )}
+            </div>
 
-              <div className="flex justify-between items-center pt-2">
-                <div className="text-xs text-side-text">
-                  {outbox.filter(t => t.status === 'PENDING').length} transaksi pending
-                </div>
-                <button 
-                  onClick={handleSyncAll}
-                  className="bg-gold hover:bg-[#A38225] text-white font-bold py-2 px-4 rounded-lg text-xs transition-colors shadow-sm flex items-center gap-1.5"
-                >
-                  <RefreshCw size={12} /> Paksa Sinkronisasi
-                </button>
-              </div>
+            <div className="p-4 border-t border-line bg-stat flex justify-between items-center">
+              <span className="text-xs text-side-text">
+                {outbox.filter(t => t.status === 'PENDING').length} menunggu sinkronisasi
+              </span>
+              <button 
+                onClick={handleSyncAll}
+                disabled={isSyncing || outbox.filter(t => t.status === 'PENDING').length === 0}
+                className="bg-gold hover:bg-[#A38225] disabled:bg-line disabled:text-side-text text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-sm"
+              >
+                <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />
+                {isSyncing ? "Menyinkronkan..." : "Sinkronkan Semua Sekarang"}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: SHIFT KASIR (PRD 5.7 Buka/Tutup Shift) */}
+      {/* SHIFT OPEN/CLOSE MODAL */}
       {showShiftModal && (
         <div className="fixed inset-0 bg-ink/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-line rounded-2xl w-full max-w-md shadow-xl overflow-hidden animate-in fade-in zoom-in-95">
+          <div className="bg-white border border-line rounded-2xl w-full max-w-sm shadow-xl overflow-hidden animate-in fade-in zoom-in-95">
             <div className="p-4 border-b border-line bg-stat flex justify-between items-center">
               <h3 className="font-serif font-bold text-lg text-ink">
                 {shiftOpen ? 'Tutup Shift Kasir' : 'Buka Shift Kasir'}
               </h3>
-              <button onClick={() => setShowShiftModal(false)} className="text-side-text hover:text-ink"><X size={18} /></button>
+              <button onClick={() => setShowShiftModal(false)} className="p-1 hover:bg-line rounded-full text-side-text">
+                <X size={18} />
+              </button>
             </div>
-            
-            <div className="p-5 space-y-4">
-              <p className="text-xs text-side-text leading-relaxed">
-                {shiftOpen 
-                  ? 'Masukkan jumlah uang tunai fisik yang ada di laci kasir saat ini untuk rekonsiliasi akhir shift:'
-                  : 'Masukkan kas awal (modal receh) sebelum memulai transaksi:'}
-              </p>
 
+            <div className="p-4 space-y-3 text-xs">
               <div>
-                <label className="text-[10px] font-bold text-side-text uppercase block mb-1">
-                  {shiftOpen ? 'UANG TUNAI FISIK DI LACI (RP)' : 'MODAL KAS AWAL (RP)'}
+                <label className="text-side-text font-bold block mb-1">
+                  {shiftOpen ? 'Kas Fisik Terhitung Saat Ini (Closing)' : 'Kas Awal Laci (Modal Awal)'}
                 </label>
                 <input 
-                  type="number" 
-                  placeholder="Contoh: 150000" 
+                  type="number"
+                  placeholder="200000"
                   value={modalCashInput}
                   onChange={(e) => setModalCashInput(e.target.value)}
-                  className="w-full bg-bg border border-line rounded-lg px-3 py-2 text-base font-bold font-mono text-ink outline-none focus:border-gold"
+                  className="w-full bg-bg border border-line rounded-lg p-2.5 font-mono text-ink text-sm outline-none focus:border-gold"
                 />
               </div>
+              <p className="text-[11px] text-side-text leading-tight">
+                {shiftOpen 
+                  ? 'Menutup shift akan mengunci transaksi sesi ini dan menghitung selisih kas fisik vs sistem.'
+                  : 'Membuka shift diperlukan sebelum mencatat transaksi kasir hari ini.'}
+              </p>
+            </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-line">
-                <button 
-                  onClick={() => setShowShiftModal(false)}
-                  className="px-4 py-2 border border-line rounded-lg text-xs font-bold text-side-text hover:bg-stat"
-                >
-                  Batal
-                </button>
-                <button 
-                  onClick={() => {
-                    setShiftOpen(!shiftOpen);
-                    setShowShiftModal(false);
-                    setModalCashInput('');
-                    showNotification(shiftOpen ? "Shift kasir berhasil ditutup!" : "Shift kasir baru berhasil dibuka!");
-                  }}
-                  className="px-4 py-2 bg-gold hover:bg-[#A38225] text-white font-bold rounded-lg text-xs shadow-sm"
-                >
-                  {shiftOpen ? 'Konfirmasi Tutup Shift' : 'Buka Shift'}
-                </button>
-              </div>
+            <div className="p-4 border-t border-line bg-stat flex justify-end gap-2">
+              <button 
+                onClick={() => setShowShiftModal(false)}
+                className="px-3 py-1.5 border border-line bg-white rounded-lg text-xs font-bold text-ink hover:bg-bg"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={() => {
+                  setShiftOpen(!shiftOpen);
+                  setShowShiftModal(false);
+                  setModalCashInput('');
+                  showNotification(shiftOpen ? "Shift kasir berhasil ditutup!" : "Shift kasir berhasil dibuka!");
+                }}
+                className="px-4 py-1.5 bg-gold hover:bg-[#A38225] text-white rounded-lg text-xs font-bold"
+              >
+                {shiftOpen ? 'Konfirmasi Tutup Shift' : 'Buka Shift'}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Base styles for target touch >= 48dp */}
-      <style dangerouslySetInnerHTML={{__html: `
-        .target-touch { min-height: 48px; min-width: 48px; }
-      `}} />
     </div>
   );
 }

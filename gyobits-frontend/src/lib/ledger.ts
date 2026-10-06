@@ -1,6 +1,6 @@
 import { db } from '@/db';
-import { stockMovements, items, auditLog } from '@/db/schema';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { stockMovements, items } from '@/db/schema';
+import { eq, inArray } from 'drizzle-orm';
 
 export interface LedgerLine {
   itemId: number;
@@ -26,6 +26,8 @@ export class InsufficientStockError extends Error {
   }
 }
 
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 /**
  * Executes ledger post following PRD §7.3 Protocol:
  * 1. Lock items in ASC order to prevent deadlock
@@ -36,17 +38,16 @@ export class InsufficientStockError extends Error {
  */
 export async function postLedger(
   lines: LedgerLine[],
-  options: { allowNegative?: boolean; tx?: any } = {}
+  options: { allowNegative?: boolean; tx?: DbTransaction } = {}
 ) {
   const { allowNegative = false } = options;
   if (!lines || lines.length === 0) return [];
 
-  const runWithTx = async (tx: any) => {
+  const runWithTx = async (tx: DbTransaction) => {
     // 1. Get distinct item IDs, sort ASC to prevent deadlocks (F-06, §7.3)
     const distinctItemIds = Array.from(new Set(lines.map((l) => l.itemId))).sort((a, b) => a - b);
 
     // 2. Fetch and lock items (SELECT ... FOR UPDATE)
-    // Drizzle with Postgres support
     const lockedItems = await tx
       .select()
       .from(items)

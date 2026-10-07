@@ -1,0 +1,11 @@
+{
+  "name": "gyobits-stokara-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev --prefix gyobits-frontend",
+    "build": "npm run build --prefix gyobits-frontend",
+    "start": "npm run start --prefix gyobits-frontend",
+    "lint": "npm run lint --prefix gyobits-frontend"
+  }
+}

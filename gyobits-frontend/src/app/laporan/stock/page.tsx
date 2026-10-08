@@ -156,9 +156,15 @@ export default function LaporanStockPage() {
 
   // Filtered Movements
   const filteredMovements = useMemo(() => {
+    // Filter periode: pilihan bulan berjalan (Oktober - Desember)
+    const monthMap: Record<string, string> = {
+      'Oktober': '/10/',
+      'November': '/11/',
+      'Desember': '/12/',
+    };
+    const targetMonthNum = monthMap[selectedMonth] || '/10/';
+
     let result = movementsData.filter((m) => {
-      // Filter periode sederhana: jika bulan Juni, ambil transaksi bulan 06; jika Oktober, ambil bulan 10
-      const targetMonthNum = selectedMonth === 'Juni' ? '/06/' : '/10/';
       if (!m.waktu.includes(targetMonthNum)) {
         return false;
       }
@@ -391,7 +397,8 @@ export default function LaporanStockPage() {
                     className="w-full bg-card border border-line text-ink dark:bg-[#14100D] dark:border-[#382E22] dark:text-[#FAF7F2] rounded-lg p-2 text-xs font-bold outline-none focus:border-gold"
                   >
                     <option value="Oktober">Oktober</option>
-                    <option value="Juni">Juni</option>
+                    <option value="November">November</option>
+                    <option value="Desember">Desember</option>
                   </select>
                 </div>
               </div>
@@ -463,7 +470,69 @@ export default function LaporanStockPage() {
         {/* RIGHT PANEL */}
         <div className="flex-1 flex flex-col gap-4 w-full">
           
-          {/* TABEL 1: RIWAYAT KELUAR MASUKNYA BARANG (AUDIT LOG TRAIL) */}
+          {/* TABEL 1: RINCIAN VALUASI & SALDO FISIK PER SKU (POSISI ATAS SESUAI INSTRUKSI USER) */}
+          <div className="bg-card border border-line rounded-[14px] p-4 shadow-sm">
+            <div className="flex justify-between items-center mb-3">
+              <div>
+                <h2 className="text-[9px] font-bold tracking-[0.1em] text-side-text uppercase mb-0.5">VALUASI & SALDO STOK</h2>
+                <h3 className="font-serif font-bold text-ink text-base">Rincian Fisik, Rata-Rata Biaya, dan Nilai Aset per SKU</h3>
+              </div>
+              <span className="text-xs text-side-text font-mono">{items.length} SKU terdaftar</span>
+            </div>
+
+            <div className="overflow-x-auto border border-line rounded-lg bg-card">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-stat text-ink dark:bg-[#1E1914] dark:text-[#E0D8C8] text-[10px] uppercase font-bold border-b border-line">
+                  <tr>
+                    <th className="p-3">SKU / NAMA ITEM</th>
+                    <th className="p-3">KATEGORI</th>
+                    <th className="p-3 text-right">SALDO FISIK</th>
+                    <th className="p-3 text-right">HPP SATUAN</th>
+                    <th className="p-3 text-right">TOTAL NILAI</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line text-ink">
+                  {items.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-6 text-center text-side-text">Memuat daftar inventaris...</td>
+                    </tr>
+                  ) : (
+                    items.map((item, idx) => {
+                      const qty = Number(item.currentStockQty || 0);
+                      const avg = Number(item.currentAvgCostRupiah || 0);
+                      const val = Number(item.currentStockValueRupiah || 0);
+                      const unit = item.displayUnit || item.unitBase;
+
+                      return (
+                        <tr key={item.id} className={idx % 2 === 0 ? 'bg-card' : 'bg-bg'}>
+                          <td className="p-3">
+                            <div className="font-bold text-ink">{item.name}</div>
+                            <div className="text-[10px] font-mono text-side-text">{item.sku}</div>
+                          </td>
+                          <td className="p-3">
+                            <span className="bg-gold-soft border border-chip-border text-gold px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                              {item.category}
+                            </span>
+                          </td>
+                          <td className="p-3 text-right font-mono font-bold">
+                            {qty.toLocaleString('id-ID')} <span className="text-side-text text-[10px]">{unit}</span>
+                          </td>
+                          <td className="p-3 text-right font-mono text-side-text">
+                            Rp {avg.toLocaleString('id-ID')}
+                          </td>
+                          <td className="p-3 text-right font-mono font-bold text-green">
+                            Rp {val.toLocaleString('id-ID')}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* TABEL 2: RIWAYAT KELUAR MASUKNYA BARANG (MUTASI GUDANG DAPUR DI BAWAH) */}
           <div className="bg-card border border-line rounded-[14px] p-4 shadow-sm">
             <div className="flex justify-between items-center mb-3">
               <div>
@@ -521,6 +590,7 @@ export default function LaporanStockPage() {
                       >
                         <option value="Semua">Semua Kategori</option>
                         <option value="Raw Protein (Daging Basah)">Raw Protein (Daging Basah)</option>
+                        <option value="Raw Vegetable (Sayuran Segar Dapur)">Raw Vegetable (Sayuran Segar Dapur)</option>
                         <option value="Raw Dry (Bahan Kering & Bumbu)">Raw Dry (Bahan Kering & Bumbu)</option>
                         <option value="Semi-Finished (Olahan Dapur)">Semi-Finished (Olahan Dapur)</option>
                         <option value="Finished (Menu Siap Jual)">Finished (Menu Siap Jual)</option>
@@ -650,69 +720,6 @@ export default function LaporanStockPage() {
                 </tbody>
               </table>
             </div>
-          </div>
-
-          {/* TABEL 2: RINCIAN VALUASI & SALDO FISIK PER SKU */}
-          <div className="bg-card border border-line rounded-[14px] p-4 shadow-sm">
-            <div className="flex justify-between items-center mb-3">
-              <div>
-                <h2 className="text-[9px] font-bold tracking-[0.1em] text-side-text uppercase mb-0.5">VALUASI & SALDO STOK</h2>
-                <h3 className="font-serif font-bold text-ink text-base">Rincian Fisik, Rata-Rata Biaya, dan Nilai Aset per SKU</h3>
-              </div>
-              <span className="text-xs text-side-text font-mono">{items.length} SKU terdaftar</span>
-            </div>
-
-            <div className="overflow-x-auto border border-line rounded-lg bg-card">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-stat text-ink dark:bg-[#1E1914] dark:text-[#E0D8C8] text-[10px] uppercase font-bold border-b border-line">
-                  <tr>
-                    <th className="p-3">SKU / NAMA ITEM</th>
-                    <th className="p-3">KATEGORI</th>
-                    <th className="p-3 text-right">SALDO FISIK</th>
-                    <th className="p-3 text-right">HPP SATUAN</th>
-                    <th className="p-3 text-right">TOTAL NILAI</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line text-ink">
-                  {items.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="p-6 text-center text-side-text">Memuat daftar inventaris...</td>
-                    </tr>
-                  ) : (
-                    items.map((item, idx) => {
-                      const qty = Number(item.currentStockQty || 0);
-                      const avg = Number(item.currentAvgCostRupiah || 0);
-                      const val = Number(item.currentStockValueRupiah || 0);
-                      const unit = item.displayUnit || item.unitBase;
-
-                      return (
-                        <tr key={item.id} className={idx % 2 === 0 ? 'bg-card' : 'bg-bg'}>
-                          <td className="p-3">
-                            <div className="font-bold text-ink">{item.name}</div>
-                            <div className="text-[10px] font-mono text-side-text">{item.sku}</div>
-                          </td>
-                          <td className="p-3">
-                            <span className="bg-gold-soft border border-chip-border text-gold px-2.5 py-0.5 rounded-full text-[10px] font-bold">
-                              {item.category}
-                            </span>
-                          </td>
-                          <td className="p-3 text-right font-mono font-bold">
-                            {qty.toLocaleString('id-ID')} <span className="text-side-text text-[10px]">{unit}</span>
-                          </td>
-                          <td className="p-3 text-right font-mono text-side-text">
-                            Rp {avg.toLocaleString('id-ID')}
-                          </td>
-                          <td className="p-3 text-right font-mono font-bold text-green">
-                            Rp {val.toLocaleString('id-ID')}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
           </div>
         </div>
 

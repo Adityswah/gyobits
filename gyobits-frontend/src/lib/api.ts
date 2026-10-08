@@ -43,7 +43,7 @@ export interface DashboardStockResponse {
 export interface ItemPayload {
   sku: string;
   name: string;
-  category: 'RAW_PROTEIN' | 'RAW_DRY' | 'SEMI_FINISHED' | 'FINISHED';
+  category: 'RAW_PROTEIN' | 'RAW_VEGETABLE' | 'RAW_DRY' | 'SEMI_FINISHED' | 'FINISHED';
   unitBase?: string;
   displayUnit?: string;
   displayFactor?: number;
@@ -171,7 +171,36 @@ export interface FinanceCategoryRecord {
   isActive: boolean;
 }
 
+// Client-side in-memory SWR cache for 0ms instant loading
+const apiCache = new Map<string, { data: unknown; timestamp: number }>();
+const CACHE_TTL_MS = 25 * 1000; // 25s fresh window
+
+export function clearApiCache() {
+  apiCache.clear();
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const isGet = !options.method || options.method.toUpperCase() === 'GET';
+
+  // 1. Instant cache response if available
+  if (isGet && apiCache.has(endpoint)) {
+    const cached = apiCache.get(endpoint)!;
+    if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      // Background revalidate without blocking UI
+      fetch(endpoint, {
+        ...options,
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      })
+        .then(r => r.json())
+        .then(fresh => {
+          if (fresh) apiCache.set(endpoint, { data: fresh, timestamp: Date.now() });
+        })
+        .catch(() => {});
+
+      return cached.data as T;
+    }
+  }
+
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {}),
@@ -187,6 +216,13 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   if (!response.ok) {
     const errorMsg = data?.error?.message || data?.message || `Request failed with status ${response.status}`;
     throw new Error(errorMsg);
+  }
+
+  if (isGet) {
+    apiCache.set(endpoint, { data, timestamp: Date.now() });
+  } else {
+    // Clear cache on write operations (POST, PUT, DELETE)
+    apiCache.clear();
   }
 
   return data;

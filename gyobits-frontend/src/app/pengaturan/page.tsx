@@ -11,7 +11,17 @@ interface StockItem {
   id?: number;
   sku: string;
   name: string;
-  category: 'RAW_PROTEIN' | 'RAW_DRY' | 'SEMI_FINISHED' | 'FINISHED';
+  category: 'RAW_PROTEIN' | 'RAW_VEGETABLE' | 'RAW_DRY' | 'SEMI_FINISHED' | 'FINISHED';
+  unit: string;
+  unitBase: string;
+  stockMode: 'STOCKED' | 'EXPLODE_BOM';
+  sellPrice?: number;
+}
+
+interface BulkItemRow {
+  sku: string;
+  name: string;
+  category: 'RAW_PROTEIN' | 'RAW_VEGETABLE' | 'RAW_DRY' | 'SEMI_FINISHED' | 'FINISHED';
   unit: string;
   unitBase: string;
   stockMode: 'STOCKED' | 'EXPLODE_BOM';
@@ -54,8 +64,16 @@ export default function PengaturanPage() {
     'Gelas',
   ]);
   const [newSatuanInput, setNewSatuanInput] = useState('');
+  const [newSatuanNama, setNewSatuanNama] = useState('');
+  const [newSatuanKode, setNewSatuanKode] = useState('');
+  const [newSatuanKategori, setNewSatuanKategori] = useState('Bahan Dapur');
   const [editingSatuanIndex, setEditingSatuanIndex] = useState<number | null>(null);
   const [editingSatuanValue, setEditingSatuanValue] = useState('');
+
+  // Bulk Item Modal State (Bisa memasukkan 1 s/d 20 item sekaligus)
+  const [showBulkItemModal, setShowBulkItemModal] = useState(false);
+  const [bulkRows, setBulkRows] = useState<BulkItemRow[]>([]);
+  const [isSavingBulk, setIsSavingBulk] = useState(false);
 
   // 2. Stock Items State (START FROM 0: BERSIH TANPA DUMMY)
   const [rawItems, setRawItems] = useState<ItemRecord[]>([]);
@@ -206,6 +224,89 @@ export default function PengaturanPage() {
     const val = satuanList[idx];
     setSatuanList(prev => prev.filter((_, i) => i !== idx));
     showNotification(`Satuan "${val}" berhasil dihapus!`);
+  };
+
+  const handleTambahSatuanForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSatuanNama.trim()) return;
+    const clean = newSatuanNama.trim();
+    if (!satuanList.includes(clean)) {
+      setSatuanList(prev => [...prev, clean]);
+      showNotification(`Satuan "${clean}" (${newSatuanKode || clean}) berhasil disimpan!`);
+    } else {
+      showNotification(`Satuan "${clean}" sudah terdaftar.`);
+    }
+    setNewSatuanNama('');
+    setNewSatuanKode('');
+  };
+
+  // Handlers - Bulk Item (1 s.d. 20 item)
+  const openBulkItemModal = () => {
+    const initialRows: BulkItemRow[] = Array.from({ length: 3 }, (_, i) => ({
+      sku: `ITM-00${items.length + i + 1}`,
+      name: '',
+      category: 'RAW_DRY',
+      unit: satuanList[0] || 'Pcs',
+      unitBase: 'pcs',
+      stockMode: 'STOCKED',
+      sellPrice: undefined,
+    }));
+    setBulkRows(initialRows);
+    setShowBulkItemModal(true);
+  };
+
+  const handleAddBulkRow = () => {
+    if (bulkRows.length >= 20) {
+      showNotification("Maksimal 20 item per input massal telah tercapai.");
+      return;
+    }
+    setBulkRows(prev => [
+      ...prev,
+      {
+        sku: `ITM-00${items.length + prev.length + 1}`,
+        name: '',
+        category: 'RAW_DRY',
+        unit: satuanList[0] || 'Pcs',
+        unitBase: 'pcs',
+        stockMode: 'STOCKED',
+        sellPrice: undefined,
+      }
+    ]);
+  };
+
+  const handleRemoveBulkRow = (index: number) => {
+    if (bulkRows.length <= 1) return;
+    setBulkRows(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveBulkItems = async () => {
+    const validRows = bulkRows.filter(r => r.name.trim() !== '');
+    if (validRows.length === 0) {
+      showNotification("Harap isi minimal 1 nama item sebelum menyimpan.");
+      return;
+    }
+    setIsSavingBulk(true);
+    try {
+      for (const row of validRows) {
+        await api.items.create({
+          sku: row.sku || `ITM-${Date.now().toString().slice(-4)}`,
+          name: row.name.trim(),
+          category: row.category,
+          displayUnit: row.unit || 'Pcs',
+          unitBase: row.unitBase || 'pcs',
+          stockMode: row.stockMode,
+          sellPriceRupiah: row.sellPrice,
+        });
+      }
+      showNotification(`Berhasil menambahkan ${validRows.length} item baru ke Master Data!`);
+      setShowBulkItemModal(false);
+      loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Gagal menyimpan item massal';
+      showNotification(`Error: ${msg}`);
+    } finally {
+      setIsSavingBulk(false);
+    }
   };
 
   // Handlers - BOM Recipe
@@ -492,7 +593,7 @@ export default function PengaturanPage() {
                     <span className="font-bold text-xs uppercase text-ink">Kategori stock</span>
                   </div>
                   <div className="text-xs text-side-text font-mono font-medium">
-                    4 kategori aktif
+                    5 kategori aktif
                   </div>
                 </button>
 
@@ -546,116 +647,161 @@ export default function PengaturanPage() {
 
             <hr className="border-line" />
 
-            {/* 3. SUB-TAB VIEW: SATUAN UKURAN (PERSIS GAMBAR USER) */}
+            {/* 3. SUB-TAB VIEW: SATUAN UKURAN (FORM MASTER DATA LENGKAP SESUAI INSTRUKSI) */}
             {masterSubTab === 'satuan' && (
-              <div className="bg-surface border border-line rounded-xl p-5 shadow-2xs">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-serif font-bold text-lg text-ink">Satuan Ukuran</h3>
-                  <span className="bg-stat border border-line px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold text-side-text">
-                    {satuanList.length} item
-                  </span>
-                </div>
-
-                {/* Input Tambah Satuan */}
-                <div className="flex gap-2 mb-4">
-                  <input
-                    type="text"
-                    value={newSatuanInput}
-                    onChange={(e) => setNewSatuanInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddSatuan()}
-                    placeholder="Contoh: kg, liter, ikat, pak, botol"
-                    className="flex-1 bg-surface border border-line rounded-lg px-3.5 py-2 text-sm text-ink outline-none focus:border-gold placeholder:text-side-text/70"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddSatuan}
-                    className="bg-gold hover:bg-[#A38225] text-white font-bold px-4 py-2 rounded-lg text-sm transition-colors shadow-sm flex items-center gap-1.5"
-                  >
-                    <Plus size={16} /> Tambah
-                  </button>
-                </div>
-
-                {/* Daftar Satuan List */}
-                <div className="space-y-2">
-                  {satuanList.map((satuan, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between p-3 rounded-lg border border-line bg-card hover:bg-stat/50 transition-colors"
-                    >
-                      {editingSatuanIndex === idx ? (
-                        <div className="flex-1 flex gap-2 mr-2">
-                          <input
-                            type="text"
-                            value={editingSatuanValue}
-                            onChange={(e) => setEditingSatuanValue(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSaveEditSatuan(idx)}
-                            autoFocus
-                            className="bg-surface border border-gold rounded px-2 py-1 text-sm text-ink font-bold outline-none flex-1"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleSaveEditSatuan(idx)}
-                            className="bg-green text-white text-xs px-2.5 py-1 rounded font-bold"
-                          >
-                            Simpan
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingSatuanIndex(null)}
-                            className="border border-line text-xs px-2 py-1 rounded text-side-text"
-                          >
-                            Batal
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 font-bold text-sm text-ink">
-                          <Edit2 size={13} className="text-side-text" />
-                          <span>{satuan}</span>
-                        </div>
-                      )}
-
-                      {editingSatuanIndex !== idx && (
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingSatuanIndex(idx);
-                              setEditingSatuanValue(satuan);
-                            }}
-                            className="p-1.5 text-side-text hover:text-gold hover:bg-gold-soft rounded transition-colors"
-                            title="Edit nama satuan"
-                          >
-                            <Edit2 size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteSatuan(idx)}
-                            className="p-1.5 text-side-text hover:text-red hover:bg-red/10 rounded transition-colors"
-                            title="Hapus satuan"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      )}
+              <div className="space-y-4">
+                {/* FORM TAMBAH SATUAN UKURAN */}
+                <div className="bg-surface border border-line rounded-xl p-5 shadow-2xs">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Scale size={18} className="text-gold" />
+                    <div>
+                      <h4 className="font-serif font-bold text-base text-ink">Form Input Satuan Ukuran</h4>
+                      <p className="text-xs text-side-text">Daftarkan satuan resmi baru untuk bahan baku, takaran resep, atau menu kasir.</p>
                     </div>
-                  ))}
+                  </div>
+
+                  <form onSubmit={handleTambahSatuanForm} className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                    <div>
+                      <label className="text-[10px] font-bold text-side-text uppercase block mb-1">Nama Satuan</label>
+                      <input
+                        type="text"
+                        value={newSatuanNama}
+                        onChange={(e) => setNewSatuanNama(e.target.value)}
+                        placeholder="Contoh: Kilogram, Ikat, Botol, Porsi"
+                        required
+                        className="w-full bg-card border border-line rounded-lg px-3 py-2 text-xs text-ink outline-none focus:border-gold font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-side-text uppercase block mb-1">Simbol / Kode Singkatan</label>
+                      <input
+                        type="text"
+                        value={newSatuanKode}
+                        onChange={(e) => setNewSatuanKode(e.target.value)}
+                        placeholder="Contoh: kg, ikt, btl, pax"
+                        className="w-full bg-card border border-line rounded-lg px-3 py-2 text-xs font-mono text-ink outline-none focus:border-gold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-side-text uppercase block mb-1">Kategori Penggunaan</label>
+                      <select
+                        value={newSatuanKategori}
+                        onChange={(e) => setNewSatuanKategori(e.target.value)}
+                        className="w-full bg-card border border-line rounded-lg px-3 py-2 text-xs text-ink outline-none focus:border-gold font-medium"
+                      >
+                        <option value="Bahan Dapur">Bahan Baku Dapur (Mentah/Segar)</option>
+                        <option value="Bumbu & Kemasan">Bumbu Kering & Kemasan</option>
+                        <option value="Menu Siap Saji">Menu Siap Saji / POS Kasir</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-3 flex justify-end pt-1">
+                      <button
+                        type="submit"
+                        className="bg-gold hover:bg-[#A38225] text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors shadow-2xs flex items-center gap-1.5"
+                      >
+                        <Plus size={15} /> Simpan Satuan Ukuran
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* DAFTAR SATUAN AKTIF */}
+                <div className="bg-surface border border-line rounded-xl p-5 shadow-2xs">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-serif font-bold text-lg text-ink">Daftar Satuan Ukuran Aktif</h3>
+                    <span className="bg-stat border border-line px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold text-side-text">
+                      {satuanList.length} item terdaftar
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {satuanList.map((satuan, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-3 rounded-lg border border-line bg-card hover:bg-stat/50 transition-colors"
+                      >
+                        {editingSatuanIndex === idx ? (
+                          <div className="flex-1 flex gap-2 mr-2">
+                            <input
+                              type="text"
+                              value={editingSatuanValue}
+                              onChange={(e) => setEditingSatuanValue(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleSaveEditSatuan(idx)}
+                              autoFocus
+                              className="bg-surface border border-gold rounded px-2 py-1 text-sm text-ink font-bold outline-none flex-1"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSaveEditSatuan(idx)}
+                              className="bg-green text-white text-xs px-2.5 py-1 rounded font-bold"
+                            >
+                              Simpan
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingSatuanIndex(null)}
+                              className="border border-line text-xs px-2 py-1 rounded text-side-text"
+                            >
+                              Batal
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 font-bold text-sm text-ink">
+                            <Edit2 size={13} className="text-side-text" />
+                            <span>{satuan}</span>
+                          </div>
+                        )}
+
+                        {editingSatuanIndex !== idx && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingSatuanIndex(idx);
+                                setEditingSatuanValue(satuan);
+                              }}
+                              className="p-1.5 text-side-text hover:text-gold hover:bg-gold-soft rounded transition-colors"
+                              title="Edit nama satuan"
+                            >
+                              <Edit2 size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSatuan(idx)}
+                              className="p-1.5 text-side-text hover:text-red hover:bg-red/10 rounded transition-colors"
+                              title="Hapus satuan"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* 4. SUB-TAB VIEW: KATEGORI STOCK */}
+            {/* 4. SUB-TAB VIEW: KATEGORI STOCK (TERMASUK RAW_VEGETABLE) */}
             {masterSubTab === 'kategori' && (
               <div className="bg-surface border border-line rounded-xl p-5 shadow-2xs">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-serif font-bold text-lg text-ink">Kategori Stock Inventory</h3>
+                  <div>
+                    <h3 className="font-serif font-bold text-lg text-ink">Kategori Stock Inventory</h3>
+                    <p className="text-xs text-side-text">Pengelompokan resmi alur rantai pasok dapur & kasir.</p>
+                  </div>
+                  <span className="bg-stat border border-line px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold text-gold">
+                    5 Kategori Aktif
+                  </span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {[
-                    { code: 'RAW_PROTEIN', name: 'Raw Protein (Daging Basah)', desc: 'Daging sapi, ayam, protein mentah yang memerlukan pembersihan / yield prep.', count: items.filter(i => i.category === 'RAW_PROTEIN').length, color: 'bg-red/10 text-red border-red/20' },
-                    { code: 'RAW_DRY', name: 'Raw Dry (Bahan Kering & Bumbu)', desc: 'Kulit gyoza, bumbu, saus, kecap, plastik kemasan.', count: items.filter(i => i.category === 'RAW_DRY').length, color: 'bg-gold-soft text-gold border-chip-border' },
-                    { code: 'SEMI_FINISHED', name: 'Semi-Finished (Olahan Dapur)', desc: 'Daging cincang bersih hasil prep, gyoza mentah siap masak.', count: items.filter(i => i.category === 'SEMI_FINISHED').length, color: 'bg-green/10 text-green border-green/20' },
-                    { code: 'FINISHED', name: 'Finished (Menu Siap Saji POS)', desc: 'Gyoza goreng isi 10, gyoza isi 8, es teh manis.', count: items.filter(i => i.category === 'FINISHED').length, color: 'bg-stat text-ink border-line' },
+                    { code: 'RAW_PROTEIN', name: 'Raw Protein (Daging Basah)', desc: 'Daging ayam, sapi, udang, protein mentah yang memerlukan penanganan suhu dingin & yield prep.', count: items.filter(i => i.category === 'RAW_PROTEIN').length, color: 'bg-red/10 text-red border-red/20' },
+                    { code: 'RAW_VEGETABLE', name: 'Raw Vegetable (Sayuran Segar Dapur)', desc: 'Kol, daun bawang, bawang putih, jahe, sayur segar dapur yang langsung dipakai olah harian.', count: items.filter(i => i.category === 'RAW_VEGETABLE').length, color: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' },
+                    { code: 'RAW_DRY', name: 'Raw Dry (Bahan Kering & Bumbu)', desc: 'Kulit gyoza, bumbu bubuk, saus, kecap, plastik segel, paper box kemasan.', count: items.filter(i => i.category === 'RAW_DRY').length, color: 'bg-gold-soft text-gold border-chip-border' },
+                    { code: 'SEMI_FINISHED', name: 'Semi-Finished (Olahan Dapur)', desc: 'Daging cincang bersih hasil prep, adonan pasta gyoza, gyoza mentah siap masak.', count: items.filter(i => i.category === 'SEMI_FINISHED').length, color: 'bg-green/10 text-green border-green/20' },
+                    { code: 'FINISHED', name: 'Finished (Menu Siap Saji POS)', desc: 'Gyoza isi 10, gyoza isi 8, gyoza frozen pack, es teh, chili oil cup.', count: items.filter(i => i.category === 'FINISHED').length, color: 'bg-stat text-ink border-line' },
                   ].map((cat, idx) => (
                     <div key={idx} className="p-4 rounded-xl border border-line bg-card shadow-2xs flex flex-col justify-between">
                       <div>
@@ -679,17 +825,26 @@ export default function PengaturanPage() {
             {/* 5. SUB-TAB VIEW: BARANG STOCK */}
             {masterSubTab === 'barang' && (
               <div>
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                   <div>
                     <h3 className="font-serif font-bold text-lg text-ink">Katalog Barang Stock</h3>
                     <p className="text-xs text-side-text">Daftar item bahan mentah, olahan, dan menu kasir.</p>
                   </div>
-                  <button 
-                    onClick={openAddItemModal}
-                    className="bg-gold hover:bg-[#A38225] text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors shadow-sm flex items-center gap-2"
-                  >
-                    <Plus size={16} /> Tambah Item Baru
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={openBulkItemModal}
+                      className="bg-card border border-line hover:border-gold hover:bg-gold-soft text-ink font-bold py-2 px-3.5 rounded-lg text-xs transition-colors shadow-2xs flex items-center gap-1.5"
+                      title="Input 1 s/d 20 item sekaligus"
+                    >
+                      <Layers size={15} className="text-gold" /> Input Massal (1-20 Item)
+                    </button>
+                    <button 
+                      onClick={openAddItemModal}
+                      className="bg-gold hover:bg-[#A38225] text-white font-bold py-2 px-4 rounded-lg text-xs transition-colors shadow-sm flex items-center gap-1.5"
+                    >
+                      <Plus size={15} /> Tambah Item Baru
+                    </button>
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto border border-line rounded-lg">
@@ -1131,6 +1286,7 @@ export default function PengaturanPage() {
                   >
                     <option value="RAW_DRY">RAW_DRY (Bahan Kering)</option>
                     <option value="RAW_PROTEIN">RAW_PROTEIN (Daging/Basah)</option>
+                    <option value="RAW_VEGETABLE">RAW_VEGETABLE (Sayuran Segar Dapur)</option>
                     <option value="SEMI_FINISHED">SEMI_FINISHED (Olahan)</option>
                     <option value="FINISHED">FINISHED (Menu Siap Jual)</option>
                   </select>
@@ -1205,6 +1361,202 @@ export default function PengaturanPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL: BULK ADD ITEM (1 S.D. 20 ITEM SEKALIGUS)
+          ======================================================== */}
+      {showBulkItemModal && (
+        <div className="fixed inset-0 bg-ink/40 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-card border border-line rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 max-h-[92vh] flex flex-col">
+            <div className="p-4 border-b border-line bg-stat flex justify-between items-center shrink-0">
+              <div>
+                <span className="text-[10px] font-bold text-gold uppercase tracking-wider">
+                  INPUT MASSAL MASTER DATA
+                </span>
+                <h3 className="font-serif font-bold text-lg text-ink">
+                  Tambah Banyak Barang Stock (1 - 20 Item Sekaligus)
+                </h3>
+              </div>
+              <button onClick={() => setShowBulkItemModal(false)} className="text-side-text hover:text-ink"><X size={18} /></button>
+            </div>
+
+            <div className="p-4 overflow-y-auto flex-1">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-xs text-side-text font-medium">
+                  Jumlah item: <strong className="text-ink">{bulkRows.length}</strong> / 20 item maksimal
+                </span>
+                <button
+                  type="button"
+                  onClick={handleAddBulkRow}
+                  disabled={bulkRows.length >= 20}
+                  className="bg-card border border-line hover:border-gold hover:bg-gold-soft text-ink font-bold px-3 py-1.5 rounded-lg text-xs transition-colors shadow-2xs flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Plus size={14} className="text-gold" /> Tambah Baris ({bulkRows.length}/20)
+                </button>
+              </div>
+
+              <div className="overflow-x-auto border border-line rounded-xl bg-card">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-stat text-[10px] text-side-text uppercase font-bold border-b border-line">
+                    <tr>
+                      <th className="p-2.5 w-10 text-center">#</th>
+                      <th className="p-2.5 min-w-[110px]">SKU</th>
+                      <th className="p-2.5 min-w-[180px]">NAMA ITEM</th>
+                      <th className="p-2.5 min-w-[150px]">KATEGORI</th>
+                      <th className="p-2.5 min-w-[100px]">SATUAN</th>
+                      <th className="p-2.5 min-w-[90px]">DASAR</th>
+                      <th className="p-2.5 min-w-[110px]">MODE</th>
+                      <th className="p-2.5 min-w-[110px] text-right">HARGA (RP)</th>
+                      <th className="p-2.5 w-10 text-center">AKSI</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line text-ink">
+                    {bulkRows.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-stat/30 transition-colors">
+                        <td className="p-2 text-center font-mono font-bold text-side-text">{idx + 1}</td>
+                        <td className="p-2">
+                          <input
+                            type="text"
+                            value={row.sku}
+                            onChange={(e) => {
+                              const updated = [...bulkRows];
+                              updated[idx].sku = e.target.value;
+                              setBulkRows(updated);
+                            }}
+                            className="w-full bg-surface border border-line rounded px-2 py-1 text-xs font-mono font-bold text-ink outline-none focus:border-gold"
+                          />
+                        </td>
+                        <td className="p-2">
+                          <input
+                            type="text"
+                            placeholder="Nama item..."
+                            value={row.name}
+                            onChange={(e) => {
+                              const updated = [...bulkRows];
+                              updated[idx].name = e.target.value;
+                              setBulkRows(updated);
+                            }}
+                            className="w-full bg-surface border border-line rounded px-2 py-1 text-xs font-bold text-ink outline-none focus:border-gold"
+                          />
+                        </td>
+                        <td className="p-2">
+                          <select
+                            value={row.category}
+                            onChange={(e) => {
+                              const updated = [...bulkRows];
+                              updated[idx].category = e.target.value as BulkItemRow['category'];
+                              setBulkRows(updated);
+                            }}
+                            className="w-full bg-surface border border-line rounded px-2 py-1 text-xs text-ink outline-none focus:border-gold font-medium"
+                          >
+                            <option value="RAW_PROTEIN">RAW_PROTEIN</option>
+                            <option value="RAW_VEGETABLE">RAW_VEGETABLE</option>
+                            <option value="RAW_DRY">RAW_DRY</option>
+                            <option value="SEMI_FINISHED">SEMI_FINISHED</option>
+                            <option value="FINISHED">FINISHED</option>
+                          </select>
+                        </td>
+                        <td className="p-2">
+                          <select
+                            value={row.unit}
+                            onChange={(e) => {
+                              const updated = [...bulkRows];
+                              updated[idx].unit = e.target.value;
+                              setBulkRows(updated);
+                            }}
+                            className="w-full bg-surface border border-line rounded px-2 py-1 text-xs text-ink outline-none focus:border-gold font-medium"
+                          >
+                            {satuanList.map((s, sIdx) => (
+                              <option key={sIdx} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="p-2">
+                          <select
+                            value={row.unitBase}
+                            onChange={(e) => {
+                              const updated = [...bulkRows];
+                              updated[idx].unitBase = e.target.value;
+                              setBulkRows(updated);
+                            }}
+                            className="w-full bg-surface border border-line rounded px-2 py-1 text-xs text-ink outline-none focus:border-gold font-medium"
+                          >
+                            <option value="pcs">pcs</option>
+                            <option value="g">g</option>
+                            <option value="ml">ml</option>
+                          </select>
+                        </td>
+                        <td className="p-2">
+                          <select
+                            value={row.stockMode}
+                            onChange={(e) => {
+                              const updated = [...bulkRows];
+                              updated[idx].stockMode = e.target.value as 'STOCKED' | 'EXPLODE_BOM';
+                              setBulkRows(updated);
+                            }}
+                            className="w-full bg-surface border border-line rounded px-2 py-1 text-xs text-ink outline-none focus:border-gold font-medium"
+                          >
+                            <option value="STOCKED">STOCKED</option>
+                            <option value="EXPLODE_BOM">EXPLODE_BOM</option>
+                          </select>
+                        </td>
+                        <td className="p-2">
+                          <input
+                            type="number"
+                            placeholder="0"
+                            value={row.sellPrice || ''}
+                            onChange={(e) => {
+                              const updated = [...bulkRows];
+                              updated[idx].sellPrice = e.target.value ? Number(e.target.value) : undefined;
+                              setBulkRows(updated);
+                            }}
+                            className="w-full bg-surface border border-line rounded px-2 py-1 text-xs font-mono text-right text-ink outline-none focus:border-gold"
+                          />
+                        </td>
+                        <td className="p-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveBulkRow(idx)}
+                            disabled={bulkRows.length <= 1}
+                            className="text-side-text hover:text-red p-1 rounded disabled:opacity-30"
+                            title="Hapus Baris Ini"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-line bg-stat flex justify-between items-center shrink-0">
+              <span className="text-xs text-side-text">
+                Baris kosong tanpa nama item akan otomatis diabaikan saat disimpan.
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkItemModal(false)}
+                  className="px-4 py-2 border border-line rounded-lg text-xs font-bold text-side-text hover:bg-card"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveBulkItems}
+                  disabled={isSavingBulk}
+                  className="px-5 py-2 bg-gold hover:bg-[#A38225] text-white font-bold rounded-lg text-xs transition-colors shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Save size={14} />
+                  {isSavingBulk ? 'Menyimpan...' : `Simpan Semua Item (${bulkRows.filter(r => r.name.trim()).length} Item)`}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

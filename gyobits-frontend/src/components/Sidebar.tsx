@@ -8,41 +8,50 @@ import {
   Calculator,
   Sliders,
   LogOut,
-  Store
+  Store,
+  MoreHorizontal,
+  X
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+interface MenuItem {
+  name: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  href: string;
+  badge?: string;
+}
+
+interface MenuGroup {
+  title: string;
+  items: MenuItem[];
+}
+
 // Handmade minimalist icons mapping
-const menuGroups = [
+const menuGroups: MenuGroup[] = [
   {
-    title: 'KASIR',
+    title: 'UTAMA',
     items: [
+      { name: 'Dashboard', icon: Gauge, href: '/' },
       { name: 'POS Terminal', icon: Store, href: '/pos' },
     ]
   },
   {
-    title: 'COMMAND CENTER',
+    title: 'GUDANG & DAPUR',
     items: [
-      { name: 'Dashboard', icon: Gauge, href: '/' },
-      { name: 'Stock', icon: Boxes, href: '/stock', badge: 2 },
+      { name: 'Stock Inventory', icon: Boxes, href: '/stock' },
+      { name: 'Input Operasional', icon: Calculator, href: '/input' },
     ]
   },
   {
-    title: 'LAPORAN',
+    title: 'LAPORAN RESMI',
     items: [
-      { name: 'Finance', icon: FileSpreadsheet, href: '/laporan/finance' },
-      { name: 'Stock', icon: Scroll, href: '/laporan/stock' },
+      { name: 'Laporan Finance', icon: FileSpreadsheet, href: '/laporan/finance' },
+      { name: 'Laporan Stock', icon: Scroll, href: '/laporan/stock' },
     ]
   },
   {
-    title: 'OPERASIONAL',
-    items: [
-      { name: 'Input', icon: Calculator, href: '/input' },
-    ]
-  },
-  {
-    title: 'SETTING',
+    title: 'SISTEM',
     items: [
       { name: 'Pengaturan', icon: Sliders, href: '/pengaturan' },
     ]
@@ -52,6 +61,9 @@ const menuGroups = [
 export default function Sidebar() {
   const pathname = usePathname();
   const [isHovered, setIsHovered] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+
+  const isLainLainActive = pathname === '/stock' || pathname === '/laporan/stock' || pathname === '/pengaturan';
 
   return (
     <>
@@ -154,72 +166,124 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      {/* MOBILE BOTTOM NAVIGATION BAR: Responsif portrait & landscape */}
+      {/* POPUP MENU LAIN-LAIN (STOCK, LAPORAN STOCK, PENGATURAN) */}
+      {showMoreMenu && (
+        <div className="md:hidden fixed inset-0 z-50 flex flex-col justify-end">
+          <div 
+            onClick={() => setShowMoreMenu(false)}
+            className="absolute inset-0 bg-black/60 backdrop-blur-xs animate-in fade-in"
+          />
+          <div className="relative bg-card border-t border-line rounded-t-2xl p-4 pb-20 shadow-2xl z-10 space-y-2 animate-in slide-in-from-bottom-6">
+            <div className="flex items-center justify-between pb-2 border-b border-line">
+              <span className="text-[11px] font-bold tracking-wider text-side-text uppercase">
+                MENU LAIN-LAIN
+              </span>
+              <button 
+                onClick={() => setShowMoreMenu(false)}
+                className="p-1 rounded-lg text-side-text hover:text-ink"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2.5 pt-1">
+              <Link
+                href="/stock"
+                onClick={() => setShowMoreMenu(false)}
+                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all text-center gap-1.5 ${
+                  pathname === '/stock' ? 'bg-gold-soft border-gold text-gold font-bold' : 'bg-stat border-line text-ink hover:border-gold'
+                }`}
+              >
+                <Boxes size={22} className="text-gold" />
+                <span className="text-[11px] font-semibold">Stock</span>
+              </Link>
+
+              <Link
+                href="/laporan/stock"
+                onClick={() => setShowMoreMenu(false)}
+                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all text-center gap-1.5 ${
+                  pathname === '/laporan/stock' ? 'bg-gold-soft border-gold text-gold font-bold' : 'bg-stat border-line text-ink hover:border-gold'
+                }`}
+              >
+                <Scroll size={22} className="text-gold" />
+                <span className="text-[11px] font-semibold">Laporan Stock</span>
+              </Link>
+
+              <Link
+                href="/pengaturan"
+                onClick={() => setShowMoreMenu(false)}
+                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all text-center gap-1.5 ${
+                  pathname === '/pengaturan' ? 'bg-gold-soft border-gold text-gold font-bold' : 'bg-stat border-line text-ink hover:border-gold'
+                }`}
+              >
+                <Sliders size={22} className="text-gold" />
+                <span className="text-[11px] font-semibold">Pengaturan</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MOBILE BOTTOM NAVIGATION BAR: Tepat 5 Tombol Sesuai Permintaan User */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-side/95 backdrop-blur-md border-t border-side-edge text-side-text z-50 flex items-center justify-around px-2 shadow-2xl safe-area-bottom">
-        <Link 
-          href="/" 
-          className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-[10px] font-medium transition-colors ${
-            pathname === '/' ? 'text-gold font-bold' : 'hover:text-white'
-          }`}
-        >
-          <Gauge size={18} />
-          <span>Dashboard</span>
-        </Link>
+        {/* 1. POS */}
         <Link 
           href="/pos" 
+          onClick={() => setShowMoreMenu(false)}
           className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-[10px] font-medium transition-colors ${
             pathname === '/pos' ? 'text-gold font-bold' : 'hover:text-white'
           }`}
         >
-          <Store size={18} />
+          <Store size={19} />
           <span>POS</span>
         </Link>
+
+        {/* 2. DASHBOARD */}
         <Link 
-          href="/stock" 
-          className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-[10px] font-medium transition-colors relative ${
-            pathname === '/stock' ? 'text-gold font-bold' : 'hover:text-white'
-          }`}
-        >
-          <Boxes size={18} />
-          <span>Stock</span>
-          <span className="absolute top-0 right-2 w-2 h-2 rounded-full bg-[#3D6B50]" />
-        </Link>
-        <Link 
-          href="/laporan/finance" 
+          href="/" 
+          onClick={() => setShowMoreMenu(false)}
           className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-[10px] font-medium transition-colors ${
-            pathname === '/laporan/finance' ? 'text-gold font-bold' : 'hover:text-white'
+            pathname === '/' ? 'text-gold font-bold' : 'hover:text-white'
           }`}
         >
-          <FileSpreadsheet size={18} />
-          <span>Finance</span>
+          <Gauge size={19} />
+          <span>Dashboard</span>
         </Link>
-        <Link 
-          href="/laporan/stock" 
-          className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-[10px] font-medium transition-colors ${
-            pathname === '/laporan/stock' ? 'text-gold font-bold' : 'hover:text-white'
-          }`}
-        >
-          <Scroll size={18} />
-          <span>Lapor Stock</span>
-        </Link>
+
+        {/* 3. OPERASIONAL */}
         <Link 
           href="/input" 
+          onClick={() => setShowMoreMenu(false)}
           className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-[10px] font-medium transition-colors ${
             pathname === '/input' ? 'text-gold font-bold' : 'hover:text-white'
           }`}
         >
-          <Calculator size={18} />
+          <Calculator size={19} />
           <span>Operasional</span>
         </Link>
+
+        {/* 4. FINANCE */}
         <Link 
-          href="/pengaturan" 
+          href="/laporan/finance" 
+          onClick={() => setShowMoreMenu(false)}
           className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-[10px] font-medium transition-colors ${
-            pathname === '/pengaturan' ? 'text-gold font-bold' : 'hover:text-white'
+            pathname === '/laporan/finance' ? 'text-gold font-bold' : 'hover:text-white'
           }`}
         >
-          <Sliders size={18} />
-          <span>Setting</span>
+          <FileSpreadsheet size={19} />
+          <span>Finance</span>
         </Link>
+
+        {/* 5. LAIN-LAIN */}
+        <button 
+          type="button"
+          onClick={() => setShowMoreMenu(prev => !prev)}
+          className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-[10px] font-medium transition-colors ${
+            isLainLainActive || showMoreMenu ? 'text-gold font-bold' : 'hover:text-white'
+          }`}
+        >
+          <MoreHorizontal size={19} />
+          <span>Lain-Lain</span>
+        </button>
       </nav>
     </>
   );

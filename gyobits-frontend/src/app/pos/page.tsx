@@ -21,11 +21,60 @@ interface MenuItem {
 
 const MENU_CATEGORIES = ['Semua', 'Gyoza', 'Minuman', 'Ekstra'];
 
-const GYOZA_VARIANTS: Variant[] = [
-  { id: 'v1', name: 'Goreng' },
-  { id: 'v2', name: 'Kukus' },
-  { id: 'v3', name: 'Frozen' },
-  { id: 'v4', name: 'Mix' },
+const VARIANTS_ISI_10: Variant[] = [
+  { id: 'kukus', name: 'Kukus' },
+  { id: 'goreng', name: 'Goreng' },
+  { id: 'grill', name: 'Grill' },
+  { id: 'mix', name: 'Mix' },
+];
+
+const VARIANTS_ISI_8_7: Variant[] = [
+  { id: 'kukus', name: 'Kukus' },
+  { id: 'goreng', name: 'Goreng' },
+  { id: 'grill', name: 'Grill' },
+  { id: 'frozen', name: 'Frozen' },
+  { id: 'mix', name: 'Mix' },
+];
+
+const OFFICIAL_POS_MENUS: MenuItem[] = [
+  {
+    id: 101,
+    name: 'Gyoza Isi 10',
+    price: 25000,
+    category: 'Gyoza',
+    image: '/images/gyoza10.jpg',
+    variants: VARIANTS_ISI_10,
+  },
+  {
+    id: 102,
+    name: 'Gyoza Isi 10 Frozen',
+    price: 22500,
+    category: 'Gyoza',
+    image: '/images/gyoza10-frozen.jpg',
+  },
+  {
+    id: 103,
+    name: 'Gyoza Isi 8',
+    price: 20000,
+    category: 'Gyoza',
+    image: '/images/gyoza8.jpg',
+    variants: VARIANTS_ISI_8_7,
+  },
+  {
+    id: 104,
+    name: 'Gyoza Isi 7',
+    price: 20000,
+    category: 'Gyoza',
+    image: '/images/gyoza7.jpg',
+    variants: VARIANTS_ISI_8_7,
+  },
+  {
+    id: 105,
+    name: 'Chili Oil',
+    price: 3000,
+    category: 'Ekstra',
+    image: '/images/chilioil.jpg',
+  },
 ];
 
 const CUSTOMER_SOURCES = ['Offline', 'WhatsApp', 'Threads', 'Shopee', 'Lainnya'];
@@ -69,7 +118,7 @@ export default function POSPage() {
   const [isOnline, setIsOnline] = useState(true);
   const [activeCategory, setActiveCategory] = useState('Semua');
   const [search, setSearch] = useState('');
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(OFFICIAL_POS_MENUS);
   const [rawBatchStock, setRawBatchStock] = useState<number>(0);
 
   // Sales History & Hard Delete State
@@ -89,26 +138,35 @@ export default function POSPage() {
 
         // Filter finished goods for POS menu
         const finishedGoods = res.data.filter(i => i.category === 'FINISHED');
-        const formatted: MenuItem[] = finishedGoods.map(item => {
-          const lowerName = item.name.toLowerCase();
-          let cat = 'Gyoza';
-          if (lowerName.includes('teh') || lowerName.includes('es') || lowerName.includes('minum')) {
-            cat = 'Minuman';
-          } else if (lowerName.includes('chili') || lowerName.includes('saus') || lowerName.includes('ekstra') || lowerName.includes('sambal')) {
-            cat = 'Ekstra';
-          }
+        const combined = [...OFFICIAL_POS_MENUS];
 
-          const hasGyozaVariants = lowerName.includes('gyoza');
-          return {
-            id: item.id,
-            name: item.name,
-            price: Number(item.sellPriceRupiah || item.currentAvgCostRupiah || 0),
-            category: cat,
-            image: `/images/${item.sku?.toLowerCase() || 'item'}.jpg`,
-            variants: hasGyozaVariants ? GYOZA_VARIANTS : undefined,
-          };
-        });
-        setMenuItems(formatted);
+        for (const item of finishedGoods) {
+          const idx = combined.findIndex(c => c.name.toLowerCase() === item.name.toLowerCase());
+          if (idx !== -1) {
+            combined[idx].id = item.id;
+            combined[idx].price = Number(item.sellPriceRupiah) || combined[idx].price;
+          } else {
+            const lowerName = item.name.toLowerCase();
+            let cat = 'Gyoza';
+            if (lowerName.includes('teh') || lowerName.includes('es') || lowerName.includes('minum')) {
+              cat = 'Minuman';
+            } else if (lowerName.includes('chili') || lowerName.includes('saus') || lowerName.includes('ekstra') || lowerName.includes('sambal')) {
+              cat = 'Ekstra';
+            }
+
+            const is10 = lowerName.includes('10');
+            const variants = is10 ? VARIANTS_ISI_10 : VARIANTS_ISI_8_7;
+            combined.push({
+              id: item.id,
+              name: item.name,
+              price: Number(item.sellPriceRupiah || item.currentAvgCostRupiah || 0),
+              category: cat,
+              image: `/images/${item.sku?.toLowerCase() || 'item'}.jpg`,
+              variants: lowerName.includes('gyoza') && !lowerName.includes('frozen') ? variants : undefined,
+            });
+          }
+        }
+        setMenuItems(combined);
       }
     } catch (err) {
       console.warn('Failed to load menu items:', err);

@@ -13,13 +13,7 @@ export interface AuditLogItem {
   keterangan: string;
 }
 
-const DEFAULT_AUDIT_LOGS: AuditLogItem[] = [
-  { id: '1', waktu: '06/10/2026, 21.07', ref: 'SALE-20261006-014', tipe: 'POS', operator: 'Kasir Dina', nominal: 35000, keterangan: 'Penjualan POS (Gyoza Isi 10)' },
-  { id: '2', waktu: '06/10/2026, 18.30', ref: 'BCH-20261006-001', tipe: 'BATCH', operator: 'Chef Budi', nominal: 99500, keterangan: 'Produksi Batch 28 Pcs Gyoza' },
-  { id: '3', waktu: '06/10/2026, 14.15', ref: 'YLD-20261006-001', tipe: 'YIELD', operator: 'Chef Budi', nominal: 380000, keterangan: 'Prep Protein Daging Bersih' },
-  { id: '4', waktu: '06/10/2026, 10.00', ref: 'PUR-20261006-002', tipe: 'PURCHASE', operator: 'Owner', nominal: 75000, keterangan: 'Beli Kulit Gyoza 5 Pack' },
-  { id: '5', waktu: '05/10/2026, 19.45', ref: 'FIN-OUT-20261005-01', tipe: 'EXPENSE', operator: 'Owner', nominal: 50000, keterangan: 'Biaya Gas Elpiji 12kg' },
-];
+const DEFAULT_AUDIT_LOGS: AuditLogItem[] = [];
 
 interface AppContextType {
   theme: Theme;
@@ -45,7 +39,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   ]);
   const [unreadCount, setUnreadCount] = useState<number>(2);
 
-  // Shared persistent Audit Logs across all pages
+  // Shared persistent Audit Logs across all pages - starts empty (0 dummy)
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>(DEFAULT_AUDIT_LOGS);
 
   // Load theme and audit logs on mount
@@ -67,8 +61,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (savedLogs) {
         try {
           const parsed = JSON.parse(savedLogs);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setAuditLogs(parsed);
+          if (Array.isArray(parsed)) {
+            // Filter out any legacy dummy records from previous sessions
+            const cleaned = parsed.filter((l: AuditLogItem) => 
+              l.id !== '1' && l.id !== '2' && l.id !== '3' && l.id !== '4' && l.id !== '5' &&
+              !l.ref.includes('SALE-20261006-014') && !l.ref.includes('BCH-20261006-001') &&
+              !l.ref.includes('YLD-20261006-001') && !l.ref.includes('PUR-20261006-002') &&
+              !l.ref.includes('FIN-OUT-20261005-01')
+            );
+            setAuditLogs(cleaned);
+            localStorage.setItem('gyobits_audit_logs', JSON.stringify(cleaned));
           }
         } catch {
           // ignore

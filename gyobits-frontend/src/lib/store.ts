@@ -5,7 +5,7 @@ export interface ItemData {
   id: number;
   sku: string;
   name: string;
-  category: 'RAW_PROTEIN' | 'RAW_DRY' | 'SEMI_FINISHED' | 'FINISHED';
+  category: 'RAW_PROTEIN' | 'RAW_VEGETABLE' | 'RAW_DRY' | 'SEMI_FINISHED' | 'FINISHED';
   stockMode: 'STOCKED' | 'EXPLODE_BOM';
   unitBase: string;
   displayUnit: string;

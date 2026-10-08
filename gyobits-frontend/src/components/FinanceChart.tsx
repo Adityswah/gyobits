@@ -70,7 +70,8 @@ export default function FinanceChart({ chartData }: FinanceChartProps) {
         callbacks: {
           label: (context: { dataset: { label?: string }; parsed: { y: number | null } }) => {
             const val = context.parsed.y ?? 0;
-            return `${context.dataset.label || ''}: Rp ${val.toLocaleString('id-ID')}`;
+            const rbVal = Math.round(val / 1000).toLocaleString('id-ID');
+            return `${context.dataset.label || ''}: Rp ${rbVal} (Rp ${val.toLocaleString('id-ID')})`;
           }
         }
       },
@@ -87,9 +88,9 @@ export default function FinanceChart({ chartData }: FinanceChartProps) {
           color: mutedColor,
           callback: (value: number | string) => {
             const num = Number(value);
-            if (num >= 1000000) return `Rp ${(num / 1000000).toFixed(1)}jt`;
-            if (num >= 1000) return `Rp ${(num / 1000).toFixed(0)}rb`;
-            return `Rp ${num}`;
+            if (num === 0) return 'Rp 0';
+            // Pembulatan ribuan (rb) sesuai permintaan: misal Rp 1.250.000 menjadi Rp 1.250
+            return `Rp ${Math.round(num / 1000).toLocaleString('id-ID')}`;
           },
         },
         border: { dash: [4, 4] }

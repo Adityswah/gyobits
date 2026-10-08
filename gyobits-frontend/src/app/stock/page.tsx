@@ -78,6 +78,7 @@ export default function StockPage() {
 
       let catLabel = 'Raw Dry (Bahan Kering & Bumbu)';
       if (item.category === 'RAW_PROTEIN') catLabel = 'Raw Protein (Daging Basah)';
+      if (item.category === 'RAW_VEGETABLE') catLabel = 'Raw Vegetable (Sayuran Segar Dapur)';
       if (item.category === 'SEMI_FINISHED') catLabel = 'Semi-Finished (Olahan Dapur)';
       if (item.category === 'FINISHED') catLabel = 'Finished (Menu Siap Jual)';
 
@@ -249,6 +250,7 @@ export default function StockPage() {
                   >
                     <option value="Semua">Semua Kategori</option>
                     <option value="Raw Protein (Daging Basah)">Raw Protein (Daging Basah)</option>
+                    <option value="Raw Vegetable (Sayuran Segar Dapur)">Raw Vegetable (Sayuran Segar Dapur)</option>
                     <option value="Raw Dry (Bahan Kering & Bumbu)">Raw Dry (Bahan Kering & Bumbu)</option>
                     <option value="Semi-Finished (Olahan Dapur)">Semi-Finished (Olahan Dapur)</option>
                     <option value="Finished (Menu Siap Jual)">Finished (Menu Siap Jual)</option>

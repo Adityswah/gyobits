@@ -4,20 +4,20 @@
 
 :root {
   --color-side: #1A1612;
-  --color-side-edge: #413619;
-  --color-side-divider: #302C28;
-  --color-side-text: #6E6760;
+  --color-side-edge: #382F19;
+  --color-side-divider: #2D2721;
+  --color-side-text: #786F66;
   --color-gold: #B8860B;
-  --color-gold-soft: #F7F3E8;
-  --color-gold-line: #D7C48A;
-  --color-chip-border: #E5D9B4;
-  --color-bg: #F9F5F0;
-  --color-card: #FEFCFB;
-  --color-stat: #F5EFE6;
-  --color-line: #DBD2C7;
-  --color-ink: #1B1713;
-  --color-green: #266B43;
-  --color-red: #A82929;
+  --color-gold-soft: #F6F1E5;
+  --color-gold-line: #D5C288;
+  --color-chip-border: #E2D5B0;
+  --color-bg: #F8F5F0;
+  --color-card: #FFFFFF;
+  --color-stat: #F3ECE2;
+  --color-line: #DFD7CC;
+  --color-ink: #2C2723;
+  --color-green: #2B6D46;
+  --color-red: #A32D2D;
   --color-surface: #FFFFFF;
 }
 
@@ -25,7 +25,7 @@
   --color-side: #120F0D;
   --color-side-edge: #2E2512;
   --color-side-divider: #231F1A;
-  --color-side-text: #AEA59A;
+  --color-side-text: #A39A90;
   --color-gold: #E5B842;
   --color-gold-soft: #2A2215;
   --color-gold-line: #A68A34;
@@ -33,14 +33,16 @@
   --color-bg: #110E0C;
   --color-card: #1A1613;
   --color-stat: #25201A;
-  --color-line: #3D3328;
-  --color-ink: #FAF7F2;
+  --color-line: #342C24;
+  --color-ink: #F5F2EB;
   --color-green: #4DA872;
   --color-red: #E55656;
   --color-surface: #221D18;
 }
 
 @theme {
+  --font-sans: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif: var(--font-serif), "Times New Roman", Times, serif;
   --color-side: var(--color-side);
   --color-side-edge: var(--color-side-edge);
   --color-side-divider: var(--color-side-divider);

@@ -359,7 +359,7 @@ export default function FinanceReportPage() {
             <div className="flex justify-between items-start mb-3.5">
               <div>
                 <div className="text-[9px] text-side-text font-bold uppercase tracking-wider">Laporan Finance</div>
-                <div className="font-mono font-bold text-ink text-xs">1/6/2026 - 30/6/2026</div>
+                <div className="font-mono font-bold text-ink text-xs">{selectedMonth} {selectedYear}</div>
               </div>
               <Wallet size={16} className="text-gold" />
             </div>
@@ -371,7 +371,7 @@ export default function FinanceReportPage() {
               </div>
               <div className="flex justify-between border-b border-line pb-1.5">
                 <span className="text-side-text">Pengeluaran (cash + bank)</span>
-                <span className="font-mono font-bold text-red">Rp 9.164.850</span>
+                <span className="font-mono font-bold text-red">Rp {(kasCashKeluar + kasBankKeluar).toLocaleString('id-ID')}</span>
               </div>
               <div className="flex justify-between border-b border-line pb-1.5">
                 <span className="text-side-text">Pendapatan Bersih Cash</span>
@@ -449,17 +449,17 @@ export default function FinanceReportPage() {
                   <tr className="bg-card">
                     <td className="p-3 pl-6">Pendapatan Cash</td>
                     <td className="p-3 text-right font-mono">Rp {kasCashMasuk.toLocaleString('id-ID')}</td>
-                    <td className="p-3 text-right font-mono">38,17</td>
+                    <td className="p-3 text-right font-mono">{totalIncome > 0 ? ((kasCashMasuk / totalIncome) * 100).toFixed(1) : '0'}%</td>
                   </tr>
                   <tr className="bg-card">
                     <td className="p-3 pl-6">Pendapatan Bank</td>
                     <td className="p-3 text-right font-mono">Rp {kasBankMasuk.toLocaleString('id-ID')}</td>
-                    <td className="p-3 text-right font-mono">61,83</td>
+                    <td className="p-3 text-right font-mono">{totalIncome > 0 ? ((kasBankMasuk / totalIncome) * 100).toFixed(1) : '0'}%</td>
                   </tr>
                   <tr className="bg-stat/60 font-bold">
                     <td className="p-3">Total Income</td>
                     <td className="p-3 text-right font-mono text-green">Rp {totalIncome.toLocaleString('id-ID')}</td>
-                    <td className="p-3 text-right font-mono">100</td>
+                    <td className="p-3 text-right font-mono">{totalIncome > 0 ? '100%' : '0%'}</td>
                   </tr>
 
                   <tr>
@@ -468,12 +468,12 @@ export default function FinanceReportPage() {
                   <tr className="bg-card">
                     <td className="p-3 pl-6">Pengeluaran Keperluan Stock</td>
                     <td className="p-3 text-right font-mono">Rp {cogs.toLocaleString('id-ID')}</td>
-                    <td className="p-3 text-right font-mono">44,3</td>
+                    <td className="p-3 text-right font-mono">{totalIncome > 0 ? ((cogs / totalIncome) * 100).toFixed(1) : '0'}%</td>
                   </tr>
                   <tr className="bg-stat/60 font-bold">
                     <td className="p-3">GROSS PROFIT</td>
                     <td className="p-3 text-right font-mono text-gold">Rp {grossProfit.toLocaleString('id-ID')}</td>
-                    <td className="p-3 text-right font-mono">55,7</td>
+                    <td className="p-3 text-right font-mono">{totalIncome > 0 ? ((grossProfit / totalIncome) * 100).toFixed(1) : '0'}%</td>
                   </tr>
 
                   <tr>
@@ -482,17 +482,17 @@ export default function FinanceReportPage() {
                   <tr className="bg-card">
                     <td className="p-3 pl-6">Non-stock Expense</td>
                     <td className="p-3 text-right font-mono">Rp {nonStockExpense.toLocaleString('id-ID')}</td>
-                    <td className="p-3 text-right font-mono">13,08</td>
+                    <td className="p-3 text-right font-mono">{totalIncome > 0 ? ((nonStockExpense / totalIncome) * 100).toFixed(1) : '0'}%</td>
                   </tr>
                   <tr className="bg-card">
                     <td className="p-3 pl-6">Prive Owner</td>
                     <td className="p-3 text-right font-mono">Rp {priveOwner.toLocaleString('id-ID')}</td>
-                    <td className="p-3 text-right font-mono">0,59</td>
+                    <td className="p-3 text-right font-mono">0%</td>
                   </tr>
                   <tr className="bg-gold-soft/40 font-bold border-t-2 border-line">
                     <td className="p-3">NET OPERATING INCOME</td>
                     <td className="p-3 text-right font-mono text-green">Rp {netOperatingIncome.toLocaleString('id-ID')}</td>
-                    <td className="p-3 text-right font-mono text-gold">{netMargin}</td>
+                    <td className="p-3 text-right font-mono text-gold">{netMargin}%</td>
                   </tr>
                 </tbody>
               </table>
@@ -504,16 +504,16 @@ export default function FinanceReportPage() {
                 <h4 className="font-bold text-ink text-sm mb-3">Arus Kas</h4>
                 <div className="space-y-2 text-xs">
                   <div className="flex justify-between text-side-text">
-                    <span>Arus masuk operasi</span><span className="font-mono font-bold text-ink">Rp 15.810.500</span>
+                    <span>Arus masuk operasi</span><span className="font-mono font-bold text-ink">Rp {totalIncome.toLocaleString('id-ID')}</span>
                   </div>
                   <div className="flex justify-between text-side-text">
-                    <span>Arus keluar stock</span><span className="font-mono font-bold text-ink">Rp 7.003.350</span>
+                    <span>Arus keluar stock</span><span className="font-mono font-bold text-ink">Rp {cogs.toLocaleString('id-ID')}</span>
                   </div>
                   <div className="flex justify-between text-side-text border-b border-line pb-2">
-                    <span>Arus keluar non-stock</span><span className="font-mono font-bold text-ink">Rp 2.161.500</span>
+                    <span>Arus keluar non-stock</span><span className="font-mono font-bold text-ink">Rp {nonStockExpense.toLocaleString('id-ID')}</span>
                   </div>
                   <div className="flex justify-between font-bold text-ink pt-1">
-                    <span>Net cash flow</span><span className="font-mono text-green">Rp 6.645.650</span>
+                    <span>Net cash flow</span><span className="font-mono text-green">Rp {(totalIncome - (cogs + nonStockExpense)).toLocaleString('id-ID')}</span>
                   </div>
                 </div>
               </div>
@@ -522,16 +522,16 @@ export default function FinanceReportPage() {
                 <h4 className="font-bold text-ink text-sm mb-3">Neraca Lite</h4>
                 <div className="space-y-2 text-xs">
                   <div className="flex justify-between text-side-text">
-                    <span>Kas periode</span><span className="font-mono font-bold text-ink">-Rp 480.150</span>
+                    <span>Kas periode</span><span className="font-mono font-bold text-ink">Rp {saldoCash.toLocaleString('id-ID')}</span>
                   </div>
                   <div className="flex justify-between text-side-text">
-                    <span>Bank periode</span><span className="font-mono font-bold text-ink">Rp 7.125.800</span>
+                    <span>Bank periode</span><span className="font-mono font-bold text-ink">Rp {saldoBank.toLocaleString('id-ID')}</span>
                   </div>
                   <div className="flex justify-between text-side-text border-b border-line pb-2">
-                    <span>Persediaan stock</span><span className="font-mono font-bold text-ink">Rp 1.715.497</span>
+                    <span>Persediaan stock</span><span className="font-mono font-bold text-ink">Rp 0</span>
                   </div>
                   <div className="flex justify-between font-bold text-ink pt-1">
-                    <span>Aset operasional lite</span><span className="font-mono text-green">Rp 8.361.147</span>
+                    <span>Aset operasional lite</span><span className="font-mono text-green">Rp {(saldoCash + saldoBank).toLocaleString('id-ID')}</span>
                   </div>
                 </div>
               </div>

@@ -42,7 +42,7 @@ export default function InputPage() {
   const [showQuickAddItemModal, setShowQuickAddItemModal] = useState(false);
   const [quickItemForm, setQuickItemForm] = useState({
     name: '',
-    category: 'RAW_DRY' as 'RAW_DRY' | 'RAW_PROTEIN' | 'SEMI_FINISHED' | 'FINISHED',
+    category: 'RAW_DRY' as 'RAW_DRY' | 'RAW_PROTEIN' | 'RAW_VEGETABLE' | 'SEMI_FINISHED' | 'FINISHED',
     displayUnit: 'Kg',
     unitBase: 'g',
     unitPrice: 15000,
@@ -1622,11 +1622,12 @@ export default function InputPage() {
                   <label className="text-[10px] font-bold text-side-text uppercase block mb-1">Kategori</label>
                   <select 
                     value={quickItemForm.category}
-                    onChange={e => setQuickItemForm({...quickItemForm, category: e.target.value as 'RAW_DRY' | 'RAW_PROTEIN' | 'SEMI_FINISHED' | 'FINISHED'})}
+                    onChange={e => setQuickItemForm({...quickItemForm, category: e.target.value as 'RAW_DRY' | 'RAW_PROTEIN' | 'RAW_VEGETABLE' | 'SEMI_FINISHED' | 'FINISHED'})}
                     className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-xs text-ink outline-none focus:border-gold font-bold"
                   >
                     <option value="RAW_DRY">RAW_DRY (Bahan Kering)</option>
                     <option value="RAW_PROTEIN">RAW_PROTEIN (Daging/Basah)</option>
+                    <option value="RAW_VEGETABLE">RAW_VEGETABLE (Sayuran Segar Dapur)</option>
                     <option value="SEMI_FINISHED">SEMI_FINISHED (Olahan)</option>
                     <option value="FINISHED">FINISHED (Menu Jadi)</option>
                   </select>

@@ -1,5 +1,5 @@
-// In-Memory Shared Store for STOKARA
-// Used as resilient fallback when PostgreSQL is offline or during offline/mock dev mode
+// In-Memory Shared Store for STOKARA / GYOBITS
+// Clean Baseline: Start from 0 (Empty Items & Transactions, Categories Only)
 
 export interface ItemData {
   id: number;
@@ -93,6 +93,26 @@ export interface YieldPrepData {
   createdBy: number;
 }
 
+export interface RecipeLineData {
+  id: number;
+  recipeId: number;
+  itemId: number;
+  itemName?: string;
+  unit?: string;
+  qtyPerBasis: string;
+  isOverhead?: boolean;
+}
+
+export interface RecipeData {
+  id: number;
+  outputItemId: number;
+  outputItemName?: string;
+  basisQty: string;
+  version: number;
+  isActive: boolean;
+  lines: RecipeLineData[];
+}
+
 export interface ProductionBatchData {
   id: number;
   batchCode: string;
@@ -137,6 +157,7 @@ class InMemoryStore {
   yieldPreps: YieldPrepData[] = [];
   batches: ProductionBatchData[] = [];
   sales: SaleData[] = [];
+  recipes: RecipeData[] = [];
 
   private isInitialized = false;
 
@@ -144,380 +165,178 @@ class InMemoryStore {
     this.init();
   }
 
+  resetToZero() {
+    this.items = [];
+    this.recipes = [];
+    this.batches = [];
+    this.sales = [];
+    this.purchases = [];
+    this.yieldPreps = [];
+    this.transactions = [];
+    this.movements = [];
+  }
+
+  resetToExcelBaseline() {
+    this.resetToZero();
+  }
+
+  clearAllTransactions() {
+    this.transactions = [];
+    this.movements = [];
+    this.purchases = [];
+    this.yieldPreps = [];
+    this.batches = [];
+    this.sales = [];
+  }
+
+  // HARD DELETE METHODS
+  deleteItem(id: number): boolean {
+    const prevLen = this.items.length;
+    this.items = this.items.filter((i) => i.id !== id);
+    // Remove from recipes referencing this item
+    this.recipes = this.recipes.filter((r) => r.outputItemId !== id);
+    for (const r of this.recipes) {
+      r.lines = r.lines.filter((l) => l.itemId !== id);
+    }
+    return this.items.length < prevLen;
+  }
+
+  deletePurchase(id: number): boolean {
+    const pIndex = this.purchases.findIndex((p) => p.id === id);
+    if (pIndex === -1) return false;
+    const [deleted] = this.purchases.splice(pIndex, 1);
+
+    // Revert stock deductions if desired or adjust stocks
+    if (deleted?.lines) {
+      for (const line of deleted.lines) {
+        const it = this.items.find((i) => i.id === line.itemId);
+        if (it) {
+          const curQty = Number(it.currentStockQty) || 0;
+          const curVal = Number(it.currentStockValueRupiah) || 0;
+          const remQty = Math.max(0, curQty - line.qty);
+          const remVal = Math.max(0, curVal - line.lineTotalRupiah);
+          it.currentStockQty = remQty.toString();
+          it.currentStockValueRupiah = remVal.toString();
+          it.currentAvgCostRupiah = remQty > 0 ? (remVal / remQty).toFixed(2) : '0';
+        }
+      }
+    }
+
+    // Hard delete related finance transaction
+    this.transactions = this.transactions.filter(
+      (t) => !(t.sourceType === 'PURCHASE' && (t.sourceId === id || t.note?.includes(deleted.purchaseCode)))
+    );
+
+    // Hard delete related stock movements
+    this.movements = this.movements.filter(
+      (m) => !(m.referenceType === 'PURCHASE' && m.referenceId === id)
+    );
+
+    return true;
+  }
+
+  deleteYieldPrep(id: number): boolean {
+    const yIndex = this.yieldPreps.findIndex((y) => y.id === id);
+    if (yIndex === -1) return false;
+    const [deleted] = this.yieldPreps.splice(yIndex, 1);
+
+    // Hard delete related stock movements
+    this.movements = this.movements.filter(
+      (m) => !(m.referenceType === 'YIELD_PREP' && m.referenceId === id)
+    );
+
+    return true;
+  }
+
+  deleteBatch(id: number): boolean {
+    const bIndex = this.batches.findIndex((b) => b.id === id);
+    if (bIndex === -1) return false;
+    const [deleted] = this.batches.splice(bIndex, 1);
+
+    // Hard delete related stock movements
+    this.movements = this.movements.filter(
+      (m) => !(m.referenceType === 'PRODUCTION_BATCH' && m.referenceId === id)
+    );
+
+    return true;
+  }
+
+  deleteRecipe(id: number): boolean {
+    const prevLen = this.recipes.length;
+    this.recipes = this.recipes.filter((r) => r.id !== id);
+    return this.recipes.length < prevLen;
+  }
+
+  deleteSale(idOrCode: number | string): boolean {
+    const sIndex = this.sales.findIndex(
+      (s) => s.id === Number(idOrCode) || s.saleCode === idOrCode || s.offlineInvoiceId === idOrCode
+    );
+    if (sIndex === -1) return false;
+    const [deleted] = this.sales.splice(sIndex, 1);
+
+    // Hard delete related finance transaction
+    this.transactions = this.transactions.filter(
+      (t) => !(t.sourceType === 'SALE' && (t.sourceId === deleted.id || t.note?.includes(deleted.saleCode)))
+    );
+
+    // Hard delete related stock movements
+    this.movements = this.movements.filter(
+      (m) => !(m.referenceType === 'SALE' && m.referenceId === deleted.id)
+    );
+
+    return true;
+  }
+
+  deleteTransaction(id: number): boolean {
+    const prevLen = this.transactions.length;
+    this.transactions = this.transactions.filter((t) => t.id !== id);
+    return this.transactions.length < prevLen;
+  }
+
   init() {
     if (this.isInitialized) return;
     this.isInitialized = true;
 
-    // Default Seed Items
-    this.items = [
-      {
-        id: 1,
-        sku: 'ING-KCP-01',
-        name: 'Kecap Manis Indofood 700ml',
-        category: 'RAW_DRY',
-        stockMode: 'STOCKED',
-        unitBase: 'pcs',
-        displayUnit: 'Pcs',
-        displayFactor: '1',
-        currentStockQty: '0.55',
-        currentStockValueRupiah: '12650',
-        currentAvgCostRupiah: '23000',
-        oversold: false,
-        minStockAlert: '4',
-        sellPriceRupiah: '0',
-        isActive: true,
-        createdAt: '2026-10-01T08:00:00Z',
-        updatedAt: '2026-10-06T14:20:00Z',
-      },
-      {
-        id: 2,
-        sku: 'RAW-DRY-GLM-02',
-        name: 'Gula Merah',
-        category: 'RAW_DRY',
-        stockMode: 'STOCKED',
-        unitBase: 'g',
-        displayUnit: 'Kg',
-        displayFactor: '1000',
-        currentStockQty: '0',
-        currentStockValueRupiah: '0',
-        currentAvgCostRupiah: '20',
-        oversold: false,
-        minStockAlert: '2000',
-        sellPriceRupiah: '0',
-        isActive: true,
-        createdAt: '2026-10-01T08:00:00Z',
-        updatedAt: '2026-10-04T11:00:00Z',
-      },
-      {
-        id: 3,
-        sku: 'RAW-DRY-PLS-01',
-        name: 'Plastik Kemasan 1kg',
-        category: 'RAW_DRY',
-        stockMode: 'STOCKED',
-        unitBase: 'pcs',
-        displayUnit: 'Pax',
-        displayFactor: '1',
-        currentStockQty: '2',
-        currentStockValueRupiah: '14000',
-        currentAvgCostRupiah: '7000',
-        oversold: false,
-        minStockAlert: '2',
-        sellPriceRupiah: '0',
-        isActive: true,
-        createdAt: '2026-10-01T08:00:00Z',
-        updatedAt: '2026-10-05T09:00:00Z',
-      },
-      {
-        id: 4,
-        sku: 'RAW-PRO-SP1',
-        name: 'Daging Sapi Utuh (Raw)',
-        category: 'RAW_PROTEIN',
-        stockMode: 'STOCKED',
-        unitBase: 'g',
-        displayUnit: 'Kg',
-        displayFactor: '1000',
-        currentStockQty: '10000',
-        currentStockValueRupiah: '380000',
-        currentAvgCostRupiah: '38',
-        oversold: false,
-        minStockAlert: '5000',
-        sellPriceRupiah: '0',
-        isActive: true,
-        createdAt: '2026-10-01T08:00:00Z',
-        updatedAt: '2026-10-06T10:00:00Z',
-      },
-      {
-        id: 5,
-        sku: 'SEM-PRO-SP2',
-        name: 'Daging Sapi Cincang Bersih',
-        category: 'SEMI_FINISHED',
-        stockMode: 'STOCKED',
-        unitBase: 'g',
-        displayUnit: 'g',
-        displayFactor: '1',
-        currentStockQty: '8000',
-        currentStockValueRupiah: '380000',
-        currentAvgCostRupiah: '47.5',
-        oversold: false,
-        minStockAlert: '2000',
-        sellPriceRupiah: '0',
-        isActive: true,
-        createdAt: '2026-10-01T08:00:00Z',
-        updatedAt: '2026-10-06T10:00:00Z',
-      },
-      {
-        id: 6,
-        sku: 'RAW-DRY-KLT-01',
-        name: 'Kulit Gyoza',
-        category: 'RAW_DRY',
-        stockMode: 'STOCKED',
-        unitBase: 'pcs',
-        displayUnit: 'Pcs',
-        displayFactor: '1',
-        currentStockQty: '100',
-        currentStockValueRupiah: '15000',
-        currentAvgCostRupiah: '150',
-        oversold: false,
-        minStockAlert: '30',
-        sellPriceRupiah: '0',
-        isActive: true,
-        createdAt: '2026-10-01T08:00:00Z',
-        updatedAt: '2026-10-05T09:00:00Z',
-      },
-      {
-        id: 7,
-        sku: 'SEM-GYO-MNT',
-        name: 'Gyoza Mentah Siap Masak',
-        category: 'SEMI_FINISHED',
-        stockMode: 'STOCKED',
-        unitBase: 'pcs',
-        displayUnit: 'Pcs',
-        displayFactor: '1',
-        currentStockQty: '45',
-        currentStockValueRupiah: '67500',
-        currentAvgCostRupiah: '1500',
-        oversold: false,
-        minStockAlert: '10',
-        sellPriceRupiah: '0',
-        isActive: true,
-        createdAt: '2026-10-01T08:00:00Z',
-        updatedAt: '2026-10-06T11:00:00Z',
-      },
-      {
-        id: 8,
-        sku: 'FNS-GYO-10',
-        name: 'Gyoza Isi 10',
-        category: 'FINISHED',
-        stockMode: 'EXPLODE_BOM',
-        unitBase: 'pcs',
-        displayUnit: 'Porsi',
-        displayFactor: '1',
-        currentStockQty: '0',
-        currentStockValueRupiah: '0',
-        currentAvgCostRupiah: '0',
-        oversold: false,
-        minStockAlert: '0',
-        sellPriceRupiah: '35000',
-        isActive: true,
-        createdAt: '2026-10-01T08:00:00Z',
-        updatedAt: '2026-10-06T12:00:00Z',
-      },
-      {
-        id: 9,
-        sku: 'FNS-GYO-08',
-        name: 'Gyoza Isi 8',
-        category: 'FINISHED',
-        stockMode: 'EXPLODE_BOM',
-        unitBase: 'pcs',
-        displayUnit: 'Porsi',
-        displayFactor: '1',
-        currentStockQty: '0',
-        currentStockValueRupiah: '0',
-        currentAvgCostRupiah: '0',
-        oversold: false,
-        minStockAlert: '0',
-        sellPriceRupiah: '28000',
-        isActive: true,
-        createdAt: '2026-10-01T08:00:00Z',
-        updatedAt: '2026-10-06T12:00:00Z',
-      },
-      {
-        id: 10,
-        sku: 'FNS-GYO-07',
-        name: 'Gyoza Isi 7',
-        category: 'FINISHED',
-        stockMode: 'EXPLODE_BOM',
-        unitBase: 'pcs',
-        displayUnit: 'Porsi',
-        displayFactor: '1',
-        currentStockQty: '0',
-        currentStockValueRupiah: '0',
-        currentAvgCostRupiah: '0',
-        oversold: false,
-        minStockAlert: '0',
-        sellPriceRupiah: '25000',
-        isActive: true,
-        createdAt: '2026-10-01T08:00:00Z',
-        updatedAt: '2026-10-06T12:00:00Z',
-      },
-      {
-        id: 11,
-        sku: 'FNS-MNM-EST',
-        name: 'Es Teh Manis',
-        category: 'FINISHED',
-        stockMode: 'STOCKED',
-        unitBase: 'pcs',
-        displayUnit: 'Gelas',
-        displayFactor: '1',
-        currentStockQty: '50',
-        currentStockValueRupiah: '50000',
-        currentAvgCostRupiah: '1000',
-        oversold: false,
-        minStockAlert: '5',
-        sellPriceRupiah: '5000',
-        isActive: true,
-        createdAt: '2026-10-01T08:00:00Z',
-        updatedAt: '2026-10-06T12:00:00Z',
-      },
-      {
-        id: 12,
-        sku: 'FNS-EKS-CHO',
-        name: 'Chili Oil Ekstra',
-        category: 'FINISHED',
-        stockMode: 'STOCKED',
-        unitBase: 'pcs',
-        displayUnit: 'Cup',
-        displayFactor: '1',
-        currentStockQty: '30',
-        currentStockValueRupiah: '30000',
-        currentAvgCostRupiah: '1000',
-        oversold: false,
-        minStockAlert: '5',
-        sellPriceRupiah: '3000',
-        isActive: true,
-        createdAt: '2026-10-01T08:00:00Z',
-        updatedAt: '2026-10-06T12:00:00Z',
-      },
-    ];
+    // START DARI 0: ITEMS KOSONG MURNI
+    this.items = [];
 
-    // Default Finance Categories
+    // START DARI 0: BOM / RESEP KOSONG MURNI
+    this.recipes = [];
+
+    // PERTAHANKAN KATEGORI KEUANGAN (STANDAR OPERASIONAL RESTORAN)
     this.categories = [
       { id: 1, name: 'Penjualan Kasir', kind: 'INCOME', isSystem: true, isActive: true },
-      { id: 2, name: 'Pendapatan Luar Usaha', kind: 'INCOME', isSystem: false, isActive: true },
-      { id: 3, name: 'Pembelian Bahan Baku', kind: 'EXPENSE', isSystem: true, isActive: true },
-      { id: 4, name: 'Biaya Pemasaran / Iklan', kind: 'EXPENSE', isSystem: false, isActive: true },
-      { id: 5, name: 'Gaji Karyawan', kind: 'EXPENSE', isSystem: false, isActive: true },
-      { id: 6, name: 'Sewa Tempat', kind: 'EXPENSE', isSystem: false, isActive: true },
-      { id: 7, name: 'Loss Kerugian Produksi', kind: 'EXPENSE', isSystem: true, isActive: true },
-      { id: 8, name: 'Operasional Lainnya', kind: 'EXPENSE', isSystem: false, isActive: true },
+      { id: 2, name: 'Setoran Modal Pemilik / Kas Kecil', kind: 'INCOME', isSystem: false, isActive: true },
+      { id: 3, name: 'Pendapatan Luar Usaha (Jual Limbah/Kardus)', kind: 'INCOME', isSystem: false, isActive: true },
+      { id: 4, name: 'Bunga Bank / Jasa Giro', kind: 'INCOME', isSystem: false, isActive: true },
+      { id: 5, name: 'Refund & Klaim Supplier', kind: 'INCOME', isSystem: false, isActive: true },
+      { id: 6, name: 'Koreksi Selisih Kas Lebih', kind: 'INCOME', isSystem: false, isActive: true },
+      { id: 7, name: 'Pembelian Bahan Baku', kind: 'EXPENSE', isSystem: true, isActive: true },
+      { id: 8, name: 'Biaya Pemasaran / Iklan', kind: 'EXPENSE', isSystem: false, isActive: true },
+      { id: 9, name: 'Gaji Karyawan', kind: 'EXPENSE', isSystem: false, isActive: true },
+      { id: 10, name: 'Biaya Utilitas (Listrik, Air, Gas)', kind: 'EXPENSE', isSystem: false, isActive: true },
+      { id: 11, name: 'Sewa Tempat', kind: 'EXPENSE', isSystem: false, isActive: true },
+      { id: 12, name: 'Loss Kerugian Produksi', kind: 'EXPENSE', isSystem: true, isActive: true },
+      { id: 13, name: 'Operasional Lainnya', kind: 'EXPENSE', isSystem: false, isActive: true },
     ];
 
-    // Default Finance Transactions
-    this.transactions = [
-      {
-        id: 1,
-        txnDate: '2026-10-02',
-        kind: 'INCOME',
-        channel: 'CASH',
-        categoryId: 1,
-        categoryName: 'Penjualan Kasir',
-        amountRupiah: '350000',
-        sourceType: 'SALE',
-        note: 'Penjualan Shift Siang Offline',
-        createdBy: 1,
-        isReversed: false,
-        createdAt: '2026-10-02T15:00:00Z',
-      },
-      {
-        id: 2,
-        txnDate: '2026-10-03',
-        kind: 'INCOME',
-        channel: 'BANK',
-        categoryId: 1,
-        categoryName: 'Penjualan Kasir',
-        amountRupiah: '680000',
-        sourceType: 'SALE',
-        note: 'Penjualan Online QRIS & Transfer',
-        createdBy: 1,
-        isReversed: false,
-        createdAt: '2026-10-03T20:00:00Z',
-      },
-      {
-        id: 3,
-        txnDate: '2026-10-04',
-        kind: 'EXPENSE',
-        channel: 'CASH',
-        categoryId: 3,
-        categoryName: 'Pembelian Bahan Baku',
-        amountRupiah: '175000',
-        sourceType: 'PURCHASE',
-        note: 'Belanja sayur dan bumbu pasar',
-        createdBy: 1,
-        isReversed: false,
-        createdAt: '2026-10-04T08:30:00Z',
-      },
-      {
-        id: 4,
-        txnDate: '2026-10-05',
-        kind: 'EXPENSE',
-        channel: 'BANK',
-        categoryId: 4,
-        categoryName: 'Biaya Pemasaran / Iklan',
-        amountRupiah: '100000',
-        sourceType: 'MANUAL',
-        note: 'Iklan Instagram Story Promo Pembukaan',
-        createdBy: 1,
-        isReversed: false,
-        createdAt: '2026-10-05T10:00:00Z',
-      },
-      {
-        id: 5,
-        txnDate: '2026-10-06',
-        kind: 'INCOME',
-        channel: 'CASH',
-        categoryId: 1,
-        categoryName: 'Penjualan Kasir',
-        amountRupiah: '240000',
-        sourceType: 'SALE',
-        note: 'Penjualan Kasir Hari Ini (Cash)',
-        createdBy: 1,
-        isReversed: false,
-        createdAt: '2026-10-06T14:00:00Z',
-      },
-      {
-        id: 6,
-        txnDate: '2026-10-06',
-        kind: 'INCOME',
-        channel: 'BANK',
-        categoryId: 1,
-        categoryName: 'Penjualan Kasir',
-        amountRupiah: '390000',
-        sourceType: 'SALE',
-        note: 'Penjualan Kasir Hari Ini (Bank QRIS)',
-        createdBy: 1,
-        isReversed: false,
-        createdAt: '2026-10-06T16:00:00Z',
-      },
-    ];
-
-    // Seed Stock Movements
-    this.movements = [
-      {
-        id: 1,
-        itemId: 1,
-        itemName: 'Kecap Manis Indofood 700ml',
-        movementType: 'PRODUCTION_INPUT',
-        qtyDelta: '-0.2',
-        valueDeltaRupiah: '-4600',
-        qtyAfter: '0.55',
-        valueAfterRupiah: '12650',
-        referenceType: 'PRODUCTION_BATCH',
-        referenceId: 1,
-        notes: 'Produksi Bumbu Gyoza',
-        occurredAt: '2026-10-06T14:20:00Z',
-      },
-      {
-        id: 2,
-        itemId: 1,
-        itemName: 'Kecap Manis Indofood 700ml',
-        movementType: 'PURCHASE_IN',
-        qtyDelta: '1',
-        valueDeltaRupiah: '23000',
-        qtyAfter: '0.75',
-        valueAfterRupiah: '17250',
-        referenceType: 'PURCHASE',
-        referenceId: 1,
-        notes: 'Restock Toko Sejahtera',
-        occurredAt: '2026-10-05T09:15:00Z',
-      },
-    ];
+    // START DARI 0: SEMUA RIWAYAT TRANSAKSI BERSIH
+    this.batches = [];
+    this.sales = [];
+    this.purchases = [];
+    this.yieldPreps = [];
+    this.transactions = [];
+    this.movements = [];
   }
 }
 
 // Global singleton instance
 const globalStore = (globalThis as unknown as { __stokaraStore?: InMemoryStore });
-if (!globalStore.__stokaraStore) {
+if (!globalStore.__stokaraStore || typeof globalStore.__stokaraStore.deleteItem !== 'function') {
   globalStore.__stokaraStore = new InMemoryStore();
+} else {
+  // Reset store to zero cleanly
+  globalStore.__stokaraStore.resetToZero();
 }
 
 export const inMemoryStore = globalStore.__stokaraStore;

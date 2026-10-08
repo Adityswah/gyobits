@@ -12,6 +12,7 @@ import {
   Filler,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+import { useApp } from '@/context/AppContext';
 
 ChartJS.register(
   CategoryScale,
@@ -33,6 +34,14 @@ interface FinanceChartProps {
 }
 
 export default function FinanceChart({ chartData }: FinanceChartProps) {
+  const { theme } = useApp();
+  const isDark = theme === 'dark';
+
+  const textColor = isDark ? '#FAF7F2' : '#1B1713';
+  const mutedColor = isDark ? '#AEA59A' : '#6E6760';
+  const gridColor = isDark ? '#3D3328' : '#DBD2C7';
+  const tooltipBg = isDark ? '#1A1613' : '#FEFCFB';
+
   const options = {
     responsive: true,
     maintainAspectRatio: false,
@@ -46,13 +55,18 @@ export default function FinanceChart({ chartData }: FinanceChartProps) {
           boxHeight: 8,
           usePointStyle: true,
           pointStyle: 'circle',
-          font: { family: 'Inter', size: 10 },
-          color: '#1B1713'
+          font: { family: 'Inter', size: 11 },
+          color: textColor,
         }
       },
       tooltip: {
         mode: 'index' as const,
         intersect: false,
+        backgroundColor: tooltipBg,
+        titleColor: textColor,
+        bodyColor: textColor,
+        borderColor: gridColor,
+        borderWidth: 1,
         callbacks: {
           label: (context: { dataset: { label?: string }; parsed: { y: number | null } }) => {
             const val = context.parsed.y ?? 0;
@@ -65,12 +79,12 @@ export default function FinanceChart({ chartData }: FinanceChartProps) {
       y: {
         beginAtZero: true,
         grid: {
-          color: '#DBD2C7',
+          color: gridColor,
           drawBorder: false,
         },
         ticks: {
           font: { family: 'monospace', size: 11 },
-          color: '#908B85',
+          color: mutedColor,
           callback: (value: number | string) => {
             const num = Number(value);
             if (num >= 1000000) return `Rp ${(num / 1000000).toFixed(1)}jt`;
@@ -87,7 +101,7 @@ export default function FinanceChart({ chartData }: FinanceChartProps) {
         },
         ticks: {
           font: { family: 'monospace', size: 11 },
-          color: '#908B85',
+          color: mutedColor,
         }
       }
     },

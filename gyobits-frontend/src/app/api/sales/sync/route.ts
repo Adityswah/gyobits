@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sales, saleItems, saleFlags, items, recipeLines, recipes, financeTransactions, financeCategories } from '@/db/schema';
 import { postLedger, LedgerLine } from '@/lib/ledger';
-import { eq } from 'drizzle-orm';
+import { eq, ilike } from 'drizzle-orm';
 import { inMemoryStore, SaleData } from '@/lib/store';
 
 interface SyncItemPayload {
@@ -12,6 +12,18 @@ interface SyncItemPayload {
   qty: number;
   unit_price: number;
   variant_name?: string;
+}
+
+// Deteksi berapa pcs Gyoza Mentah yang digunakan per porsi menu POS
+function getGyozaPieceCount(itemName: string): number | null {
+  const norm = itemName.toLowerCase();
+  if (!norm.includes('gyoza')) return null;
+  if (norm.includes('10')) return 10;
+  if (norm.includes('8')) return 8;
+  if (norm.includes('7')) return 7;
+  const match = norm.match(/(?:isi\s*|)(\d+)/);
+  if (match) return parseInt(match[1], 10);
+  return null;
 }
 
 export async function POST(req: Request) {
@@ -124,7 +136,47 @@ export async function POST(req: Request) {
             continue;
           }
 
-          if (dbItem.stockMode === 'EXPLODE_BOM') {
+          const gyozaPcs = getGyozaPieceCount(dbItem.name || rawItem.item_name || '');
+
+          // BUSINESS LOGIC: Finished Gyoza items (Gyoza Isi 10/8/7) DO NOT have raw BOM
+          // They directly consume 10/8/7 pcs of "Gyoza Mentah Siap Masak" from the central batch!
+          if (gyozaPcs !== null) {
+            const [gyozaMentah] = await tx
+              .select()
+              .from(items)
+              .where(ilike(items.name, '%Gyoza Mentah%'));
+
+            let lineCogs = 0;
+            if (gyozaMentah) {
+              const neededPcs = gyozaPcs * Number(rawItem.qty);
+              const gyozaAvgCost = Number(gyozaMentah.currentAvgCostRupiah || 917.14);
+              const gyozaTotalCost = neededPcs * gyozaAvgCost;
+              lineCogs += gyozaTotalCost;
+
+              ledgerLinesToPost.push({
+                itemId: gyozaMentah.id,
+                type: 'SALE_OUT',
+                qtyDelta: -neededPcs,
+                referenceType: 'SALE',
+                referenceId: newSale.id,
+                userId,
+                notes: `Pengurangan Batch Central: ${rawItem.qty}x ${dbItem.name} (-${neededPcs} pcs mentah)`,
+              });
+            }
+
+            totalCogs += lineCogs;
+
+            await tx.insert(saleItems).values({
+              saleId: newSale.id,
+              lineType: 'MENU',
+              itemId: dbItem.id,
+              qty: rawItem.qty.toString(),
+              unitPriceRupiah: rawItem.unit_price.toString(),
+              lineTotalRupiah: (rawItem.qty * rawItem.unit_price).toString(),
+              hppSnapshotUnitRupiah: (lineCogs / (rawItem.qty || 1)).toString(),
+              reductionType: 'CENTRAL_BATCH_DEDUCT',
+            });
+          } else if (dbItem.stockMode === 'EXPLODE_BOM') {
             const [recipe] = await tx
               .select()
               .from(recipes)
@@ -260,7 +312,7 @@ export async function POST(req: Request) {
       return NextResponse.json(result, { status: 201 });
     } catch {
       // In-memory fallback
-      // Check existing
+      // Check existing idempotency
       const existing = inMemoryStore.sales.find((s) => s.offlineInvoiceId === offline_invoice_id);
       if (existing) {
         return NextResponse.json(
@@ -275,6 +327,111 @@ export async function POST(req: Request) {
         );
       }
 
+      let storeTotalCogs = 0;
+
+      // PROSES PENGURANGAN STOK DI IN-MEMORY STORE
+      for (const rawItem of (rawItems as SyncItemPayload[])) {
+        const lineType = rawItem.line_type || 'MENU';
+        if (lineType === 'SHIPPING' || !rawItem.item_id) continue;
+
+        const itm = inMemoryStore.items.find((i) => i.id === rawItem.item_id || i.name === rawItem.item_name);
+        const itemName = rawItem.item_name || itm?.name || '';
+        const gyozaPcs = getGyozaPieceCount(itemName);
+
+        // JIKA PRODUK GYOZA ISI 10 / 8 / 7:
+        // Mengurangi stok central "Gyoza Mentah Siap Masak" sejumlah 10, 8, atau 7 pcs * porsi!
+        if (gyozaPcs !== null) {
+          const gyozaMentah = inMemoryStore.items.find(
+            (i) => i.name.toLowerCase().includes('gyoza mentah') || i.sku === 'SEM-GYO-MNT'
+          );
+
+          if (gyozaMentah) {
+            const neededPcs = gyozaPcs * Number(rawItem.qty);
+            const curStock = Number(gyozaMentah.currentStockQty);
+            const curVal = Number(gyozaMentah.currentStockValueRupiah);
+            const avgCost = Number(gyozaMentah.currentAvgCostRupiah) || 917.14;
+            
+            const newStock = curStock - neededPcs;
+            const deductionVal = neededPcs * avgCost;
+            const newVal = Math.max(0, curVal - deductionVal);
+
+            gyozaMentah.currentStockQty = newStock.toString();
+            gyozaMentah.currentStockValueRupiah = newVal.toString();
+            if (newStock < 0) gyozaMentah.oversold = true;
+
+            storeTotalCogs += deductionVal;
+
+            inMemoryStore.movements.unshift({
+              id: inMemoryStore.movements.length + 1,
+              itemId: gyozaMentah.id,
+              itemName: gyozaMentah.name,
+              movementType: 'SALE_OUT',
+              qtyDelta: `-${neededPcs}`,
+              valueDeltaRupiah: `-${deductionVal.toFixed(0)}`,
+              qtyAfter: gyozaMentah.currentStockQty,
+              valueAfterRupiah: gyozaMentah.currentStockValueRupiah,
+              referenceType: 'SALE',
+              referenceId: inMemoryStore.sales.length + 1,
+              notes: `Pengurangan Batch Gyoza: ${rawItem.qty}x ${itemName} (-${neededPcs} pcs mentah)`,
+              occurredAt: new Date().toISOString(),
+            });
+          }
+
+          // Kurangi stok kemasan pelengkap (Paper Box / Plastik Seal, Saos, Sumpit, Stiker)
+          const isFrozen = itemName.toLowerCase().includes('frozen');
+          const boxItem = inMemoryStore.items.find((i) =>
+            isFrozen ? i.name.toLowerCase().includes('plastik seal') : i.name.toLowerCase().includes('paper box m')
+          );
+          const saosItem = inMemoryStore.items.find((i) => i.name.toLowerCase().includes('saos bangkok'));
+          const sumpitItem = inMemoryStore.items.find((i) => i.name.toLowerCase().includes('sumpit'));
+          const stikerItem = inMemoryStore.items.find((i) => i.name.toLowerCase().includes('stiker'));
+
+          [boxItem, saosItem, sumpitItem, stikerItem].forEach((pack) => {
+            if (pack) {
+              const packQty = Number(pack.currentStockQty);
+              const packVal = Number(pack.currentStockValueRupiah);
+              const packCost = Number(pack.currentAvgCostRupiah) || 0;
+              const useQty = Number(rawItem.qty);
+              const newPackQty = packQty - useQty;
+              const dedVal = useQty * packCost;
+
+              pack.currentStockQty = newPackQty.toString();
+              pack.currentStockValueRupiah = Math.max(0, packVal - dedVal).toString();
+              storeTotalCogs += dedVal;
+            }
+          });
+        } else if (itm) {
+          // Direct stock deduction (misal Es Teh Manis, Chili Oil Ekstra)
+          const curStock = Number(itm.currentStockQty);
+          const curVal = Number(itm.currentStockValueRupiah);
+          const avgCost = Number(itm.currentAvgCostRupiah) || 0;
+          const useQty = Number(rawItem.qty);
+
+          const newStock = curStock - useQty;
+          const deductionVal = useQty * avgCost;
+          const newVal = Math.max(0, curVal - deductionVal);
+
+          itm.currentStockQty = newStock.toString();
+          itm.currentStockValueRupiah = newVal.toString();
+          storeTotalCogs += deductionVal;
+
+          inMemoryStore.movements.unshift({
+            id: inMemoryStore.movements.length + 1,
+            itemId: itm.id,
+            itemName: itm.name,
+            movementType: 'SALE_OUT',
+            qtyDelta: `-${useQty}`,
+            valueDeltaRupiah: `-${deductionVal.toFixed(0)}`,
+            qtyAfter: itm.currentStockQty,
+            valueAfterRupiah: itm.currentStockValueRupiah,
+            referenceType: 'SALE',
+            referenceId: inMemoryStore.sales.length + 1,
+            notes: `Penjualan Kasir: ${useQty}x ${itm.name}`,
+            occurredAt: new Date().toISOString(),
+          });
+        }
+      }
+
       // Add to store
       const newSale: SaleData = {
         id: inMemoryStore.sales.length + 1,
@@ -283,7 +440,7 @@ export async function POST(req: Request) {
         paymentMethod: payment_method,
         paymentChannel: paymentChannel as 'CASH' | 'BANK',
         totalAmountRupiah: totalAmount.toString(),
-        cogsRupiah: '0',
+        cogsRupiah: storeTotalCogs.toFixed(0),
         deviceCreatedAt: device_created_at,
         items: (rawItems as SyncItemPayload[]).map((i) => ({
           itemId: i.item_id,
@@ -316,7 +473,7 @@ export async function POST(req: Request) {
           sale_code: saleCode,
           replay: false,
           total_amount: totalAmount,
-          cogs: 0,
+          cogs: storeTotalCogs,
           flags: detectedFlags,
         },
         { status: 201 }

@@ -75,6 +75,33 @@ export interface YieldPrepPayload {
   userId?: number;
 }
 
+export interface RecipeLineRecord {
+  id: number;
+  recipeId: number;
+  itemId: number;
+  itemName?: string;
+  unit?: string;
+  qtyPerBasis: string;
+  isOverhead?: boolean;
+}
+
+export interface RecipeRecord {
+  id: number;
+  outputItemId: number;
+  outputItemName?: string;
+  outputItemUnit?: string;
+  basisQty: string;
+  version: number;
+  isActive: boolean;
+  lines: RecipeLineRecord[];
+}
+
+export interface RecipePayload {
+  outputItemId: number;
+  basisQty: number;
+  lines: Array<{ itemId: number; qtyPerBasis: number; isOverhead?: boolean }>;
+}
+
 export interface BatchInputPayload {
   recipeId?: number;
   outputItemId: number;
@@ -100,6 +127,7 @@ export interface SaleSyncPayload {
   offline_invoice_id: string;
   device_id?: string;
   device_created_at?: string;
+  shift_id?: number;
   payment_method: 'CASH' | 'BANK';
   payment_channel?: 'CASH' | 'BANK';
   items: SaleItemPayload[];
@@ -182,6 +210,10 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
+    delete: (id: number) =>
+      request<{ success: boolean; message: string }>(`/api/items?id=${id}`, {
+        method: 'DELETE',
+      }),
   },
 
   purchases: {
@@ -190,6 +222,10 @@ export const api = {
       request<{ success: boolean; data: Record<string, unknown> }>('/api/purchases', {
         method: 'POST',
         body: JSON.stringify(payload),
+      }),
+    delete: (id: number) =>
+      request<{ success: boolean; message: string }>(`/api/purchases?id=${id}`, {
+        method: 'DELETE',
       }),
   },
 
@@ -200,6 +236,10 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
+    delete: (id: number) =>
+      request<{ success: boolean; message: string }>(`/api/yield-preps?id=${id}`, {
+        method: 'DELETE',
+      }),
   },
 
   batches: {
@@ -209,6 +249,23 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
+    delete: (id: number) =>
+      request<{ success: boolean; message: string }>(`/api/production-batches?id=${id}`, {
+        method: 'DELETE',
+      }),
+  },
+
+  recipes: {
+    getAll: () => request<{ success: boolean; data: RecipeRecord[] }>('/api/recipes'),
+    create: (payload: RecipePayload) =>
+      request<{ success: boolean; data: RecipeRecord }>('/api/recipes', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    delete: (id: number) =>
+      request<{ success: boolean; message: string }>(`/api/recipes?id=${id}`, {
+        method: 'DELETE',
+      }),
   },
 
   sales: {
@@ -217,6 +274,10 @@ export const api = {
       request<{ success: boolean; sale_code: string; total_amount: number; flags: string[] }>('/api/sales/sync', {
         method: 'POST',
         body: JSON.stringify(payload),
+      }),
+    delete: (id: number | string) =>
+      request<{ success: boolean; message: string }>(`/api/sales?id=${id}`, {
+        method: 'DELETE',
       }),
   },
 
@@ -234,11 +295,23 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
+    deleteTransaction: (id: number) =>
+      request<{ success: boolean; message: string }>(`/api/finance/transactions?id=${id}`, {
+        method: 'DELETE',
+      }),
     getCategories: () => request<{ success: boolean; data: FinanceCategoryRecord[] }>('/api/finance/categories'),
     createCategory: (payload: { name: string; kind: 'INCOME' | 'EXPENSE' }) =>
       request<{ success: boolean; data: FinanceCategoryRecord }>('/api/finance/categories', {
         method: 'POST',
         body: JSON.stringify(payload),
+      }),
+  },
+
+  system: {
+    resetTransactions: (mode: 'baseline' | 'clean' = 'baseline') =>
+      request<{ success: boolean; mode: string; message: string }>('/api/system/reset-transactions', {
+        method: 'POST',
+        body: JSON.stringify({ mode }),
       }),
   },
 };

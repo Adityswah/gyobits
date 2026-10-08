@@ -35,12 +35,15 @@ export async function GET(req: Request) {
       // In-memory fallback
       txns = inMemoryStore.transactions
         .filter((t) => !t.isReversed)
-        .filter((t) => (!from || t.txnDate >= from) && (!to || t.txnDate <= to))
+        .filter((t) => {
+          const tDate = (t.txnDate || '').slice(0, 10);
+          return (!from || tDate >= from) && (!to || tDate <= to);
+        })
         .map((t) => ({
           amountRupiah: t.amountRupiah,
           kind: t.kind,
           channel: t.channel,
-          txnDate: t.txnDate,
+          txnDate: (t.txnDate || '').slice(0, 10),
         }));
     }
 
@@ -56,23 +59,23 @@ export async function GET(req: Request) {
 
     for (const t of txns) {
       const amount = Number(t.amountRupiah);
-      const dateKey = t.txnDate;
+      const dateKey = t.txnDate || '2026-09-25';
       if (!dailyMap[dateKey]) {
         dailyMap[dateKey] = { inc: 0, exp: 0 };
       }
 
+      const ch = (t.channel || 'CASH').toUpperCase();
+
       if (t.kind === 'INCOME') {
         pendapatanKotor += amount;
         dailyMap[dateKey].inc += amount;
-        if (t.channel === 'CASH') cashIn += amount;
-        if (t.channel === 'BANK') bankIn += amount;
+        if (ch === 'CASH') cashIn += amount;
+        if (ch === 'BANK') bankIn += amount;
       } else if (t.kind === 'EXPENSE') {
-        if (t.channel) {
-          pengeluaran += amount;
-          dailyMap[dateKey].exp += amount;
-          if (t.channel === 'CASH') cashOut += amount;
-          if (t.channel === 'BANK') bankOut += amount;
-        }
+        pengeluaran += amount;
+        dailyMap[dateKey].exp += amount;
+        if (ch === 'CASH') cashOut += amount;
+        if (ch === 'BANK') bankOut += amount;
       }
     }
 
@@ -85,17 +88,17 @@ export async function GET(req: Request) {
     const chartLabels = sortedDates.length > 0
       ? sortedDates.map((d) => {
           const parts = d.split('-');
-          return parts.length >= 3 ? `${parts[2]} Okt` : d;
+          return parts.length >= 3 ? `${parts[2]}/${parts[1]}` : d;
         })
-      : ['01 Okt', '02 Okt', '03 Okt', '04 Okt', '05 Okt', '06 Okt'];
+      : ['22/09', '23/09', '24/09', '25/09'];
 
     const chartPendapatan = sortedDates.length > 0
       ? sortedDates.map((d) => dailyMap[d].inc)
-      : [0, 0, 0, 0, 0, 0];
+      : [0, 0, 0, 0];
 
     const chartPengeluaran = sortedDates.length > 0
       ? sortedDates.map((d) => dailyMap[d].exp)
-      : [0, 0, 0, 0, 0, 0];
+      : [0, 0, 0, 0];
 
     return NextResponse.json({
       pendapatanKotor,

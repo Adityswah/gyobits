@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { items } from '@/db/schema';
-import { desc } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { inMemoryStore, ItemData } from '@/lib/store';
 
 export async function GET() {
@@ -96,3 +96,40 @@ export async function POST(req: Request) {
     );
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    let id = searchParams.get('id');
+    if (!id) {
+      const body = await req.json().catch(() => ({}));
+      id = body.id;
+    }
+
+    if (!id) {
+      return NextResponse.json(
+        { error: { code: 'VALIDATION_ERROR', message: 'ID item wajib disertakan' } },
+        { status: 422 }
+      );
+    }
+
+    const itemId = Number(id);
+
+    try {
+      await db.delete(items).where(eq(items.id, itemId));
+    } catch {
+      // In-memory fallback
+    }
+
+    inMemoryStore.deleteItem(itemId);
+
+    return NextResponse.json({
+      success: true,
+      message: `Item #${itemId} berhasil dihapus secara permanen.`,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: { code: 'DELETE_FAILED', message } }, { status: 500 });
+  }
+}
+

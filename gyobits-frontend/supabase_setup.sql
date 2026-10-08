@@ -239,9 +239,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Drop trigger immutable pada stock_movements agar hard delete pembatalan transaksi diizinkan
 DROP TRIGGER IF EXISTS trg_sm_immutable ON stock_movements;
-CREATE TRIGGER trg_sm_immutable BEFORE UPDATE OR DELETE ON stock_movements
-FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
 
 -- --------------------------------------------------------------------
 -- 9. KEUANGAN & BUKU KAS
@@ -316,45 +315,6 @@ VALUES
   (8, 'Operasional Lainnya', 'EXPENSE', false, true)
 ON CONFLICT (name) DO NOTHING;
 
--- 3. Master Items
-INSERT INTO items (id, sku, name, category, stock_mode, unit_base, display_unit, display_factor, current_stock_qty, current_stock_value_rupiah, min_stock_alert, sell_price_rupiah)
-VALUES
-  (1, 'RAW-DRY-KCP-01', 'Kecap Manis Indofood 700ml', 'RAW_DRY', 'STOCKED', 'pcs', 'Pcs', 1, 1, 23000, 4, 0),
-  (2, 'RAW-DRY-GLM-02', 'Gula Merah', 'RAW_DRY', 'STOCKED', 'g', 'Kg', 1000, 2000, 40000, 1000, 0),
-  (3, 'RAW-DRY-PLS-01', 'Plastik Kemasan 1kg', 'RAW_DRY', 'STOCKED', 'pcs', 'Pax', 1, 5, 35000, 2, 0),
-  (4, 'RAW-PRO-SP1', 'Daging Sapi Utuh (Raw)', 'RAW_PROTEIN', 'STOCKED', 'g', 'Kg', 1000, 10000, 380000, 5000, 0),
-  (5, 'SEM-PRO-SP2', 'Daging Sapi Cincang Bersih', 'SEMI_FINISHED', 'STOCKED', 'g', 'g', 1, 8000, 380000, 2000, 0),
-  (6, 'RAW-DRY-KLT-01', 'Kulit Gyoza 1 Pack', 'RAW_DRY', 'STOCKED', 'pcs', 'Pack', 1, 10, 150000, 5, 0),
-  (7, 'SEM-GYO-MNT', 'Gyoza Mentah Siap Masak', 'SEMI_FINISHED', 'STOCKED', 'pcs', 'Pcs', 1, 50, 75000, 20, 0),
-  (8, 'FNS-GYO-10', 'Gyoza Isi 10', 'FINISHED', 'EXPLODE_BOM', 'pcs', 'Porsi', 1, 0, 0, 0, 35000),
-  (9, 'FNS-GYO-08', 'Gyoza Isi 8', 'FINISHED', 'EXPLODE_BOM', 'pcs', 'Porsi', 1, 0, 0, 0, 28000),
-  (10, 'FNS-GYO-07', 'Gyoza Isi 7', 'FINISHED', 'EXPLODE_BOM', 'pcs', 'Porsi', 1, 0, 0, 0, 25000),
-  (11, 'FNS-MNM-EST', 'Es Teh Manis', 'FINISHED', 'STOCKED', 'pcs', 'Gelas', 1, 100, 100000, 10, 5000),
-  (12, 'FNS-EKS-CHO', 'Chili Oil Ekstra', 'FINISHED', 'STOCKED', 'pcs', 'Cup', 1, 50, 50000, 10, 3000)
-ON CONFLICT (sku) DO NOTHING;
+-- START FROM 0: Bersih dari dummy items, recipes, dan transactions
+-- Data master barang, BOM, dan operasional akan dimasukkan manual dari UI aplikasi.
 
--- 4. Initial Recipes & Lines
-INSERT INTO recipes (id, output_item_id, basis_qty, version)
-VALUES
-  (1, 8, 1, 1),
-  (2, 9, 1, 1),
-  (3, 10, 1, 1)
-ON CONFLICT (output_item_id, version) DO NOTHING;
-
-INSERT INTO recipe_lines (recipe_id, item_id, qty_per_basis)
-VALUES
-  (1, 7, 10), -- Gyoza Isi 10 butuh 10 pcs gyoza mentah
-  (2, 7, 8),  -- Gyoza Isi 8 butuh 8 pcs gyoza mentah
-  (3, 7, 7)   -- Gyoza Isi 7 butuh 7 pcs gyoza mentah
-ON CONFLICT DO NOTHING;
-
--- 5. Initial Finance Transactions
-INSERT INTO finance_transactions (txn_date, kind, channel, category_id, amount_rupiah, source_type, note, created_by)
-VALUES
-  ('2026-10-04', 'INCOME', 'CASH', 1, 350000, 'SALE', 'Penjualan Shift Siang Offline', 1),
-  ('2026-10-05', 'INCOME', 'BANK', 1, 680000, 'SALE', 'Penjualan QRIS & Transfer', 1),
-  ('2026-10-05', 'EXPENSE', 'CASH', 3, 175000, 'PURCHASE', 'Belanja bumbu dan sayur pasar', 1),
-  ('2026-10-06', 'EXPENSE', 'BANK', 4, 100000, 'MANUAL', 'Iklan Instagram Story Promo', 1),
-  ('2026-10-06', 'INCOME', 'CASH', 1, 240000, 'SALE', 'Penjualan Kasir Hari Ini (Cash)', 1),
-  ('2026-10-06', 'INCOME', 'BANK', 1, 390000, 'SALE', 'Penjualan Kasir Hari Ini (Bank)', 1)
-ON CONFLICT DO NOTHING;

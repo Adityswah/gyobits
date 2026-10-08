@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { productionBatches, productionInputs, financeTransactions, financeCategories, items } from '@/db/schema';
+import { productionBatches, productionInputs, financeTransactions, financeCategories, items, stockMovements } from '@/db/schema';
 import { postLedger } from '@/lib/ledger';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { desc, eq, inArray, and } from 'drizzle-orm';
 import { inMemoryStore, ProductionBatchData } from '@/lib/store';
 
 interface BatchInputItem {
@@ -317,3 +317,49 @@ export async function POST(req: Request) {
     );
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    let id = searchParams.get('id');
+    if (!id) {
+      const body = await req.json().catch(() => ({}));
+      id = body.id;
+    }
+
+    if (!id) {
+      return NextResponse.json(
+        { error: { code: 'VALIDATION_ERROR', message: 'ID batch produksi wajib disertakan' } },
+        { status: 422 }
+      );
+    }
+
+    const batchId = Number(id);
+
+    try {
+      await db.transaction(async (tx) => {
+        await tx.delete(productionInputs).where(eq(productionInputs.batchId, batchId));
+        await tx.delete(stockMovements).where(
+          and(
+            eq(stockMovements.referenceType, 'PRODUCTION_BATCH'),
+            eq(stockMovements.referenceId, batchId)
+          )
+        );
+        await tx.delete(productionBatches).where(eq(productionBatches.id, batchId));
+      });
+    } catch {
+      // In-memory fallback
+    }
+
+    inMemoryStore.deleteBatch(batchId);
+
+    return NextResponse.json({
+      success: true,
+      message: `Batch Produksi #${batchId} berhasil dihapus secara permanen.`,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: { code: 'DELETE_FAILED', message } }, { status: 500 });
+  }
+}
+

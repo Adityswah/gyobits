@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { inventoryYieldPreps, items } from '@/db/schema';
+import { inventoryYieldPreps, items, stockMovements } from '@/db/schema';
 import { postLedger } from '@/lib/ledger';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, and } from 'drizzle-orm';
 import { inMemoryStore, YieldPrepData } from '@/lib/store';
 
 export async function GET() {
@@ -169,3 +169,48 @@ export async function POST(req: Request) {
     );
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    let id = searchParams.get('id');
+    if (!id) {
+      const body = await req.json().catch(() => ({}));
+      id = body.id;
+    }
+
+    if (!id) {
+      return NextResponse.json(
+        { error: { code: 'VALIDATION_ERROR', message: 'ID yield prep wajib disertakan' } },
+        { status: 422 }
+      );
+    }
+
+    const prepId = Number(id);
+
+    try {
+      await db.transaction(async (tx) => {
+        await tx.delete(stockMovements).where(
+          and(
+            eq(stockMovements.referenceType, 'YIELD_PREP'),
+            eq(stockMovements.referenceId, prepId)
+          )
+        );
+        await tx.delete(inventoryYieldPreps).where(eq(inventoryYieldPreps.id, prepId));
+      });
+    } catch {
+      // In-memory fallback
+    }
+
+    inMemoryStore.deleteYieldPrep(prepId);
+
+    return NextResponse.json({
+      success: true,
+      message: `Data Yield Prep #${prepId} berhasil dihapus secara permanen.`,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: { code: 'DELETE_FAILED', message } }, { status: 500 });
+  }
+}
+

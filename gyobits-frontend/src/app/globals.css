@@ -1,41 +1,100 @@
 @import "tailwindcss";
 
-@theme {
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
   --color-side: #1A1612;
   --color-side-edge: #413619;
   --color-side-divider: #302C28;
-  --color-side-text: #908B85;
-  --color-gold: #B8962E;
+  --color-side-text: #6E6760;
+  --color-gold: #B8860B;
   --color-gold-soft: #F7F3E8;
   --color-gold-line: #D7C48A;
   --color-chip-border: #E5D9B4;
   --color-bg: #F9F5F0;
   --color-card: #FEFCFB;
-  --color-stat: #FDFDFB;
+  --color-stat: #F5EFE6;
   --color-line: #DBD2C7;
   --color-ink: #1B1713;
-  --color-green: #3D6B50;
-  --color-red: #8A2E2E;
+  --color-green: #266B43;
+  --color-red: #A82929;
+  --color-surface: #FFFFFF;
 }
 
-:root {
-  --background: #F9F5F0;
-  --foreground: #1B1713;
+.dark {
+  --color-side: #120F0D;
+  --color-side-edge: #2E2512;
+  --color-side-divider: #231F1A;
+  --color-side-text: #AEA59A;
+  --color-gold: #E5B842;
+  --color-gold-soft: #2A2215;
+  --color-gold-line: #A68A34;
+  --color-chip-border: #4D3F22;
+  --color-bg: #110E0C;
+  --color-card: #1A1613;
+  --color-stat: #25201A;
+  --color-line: #3D3328;
+  --color-ink: #FAF7F2;
+  --color-green: #4DA872;
+  --color-red: #E55656;
+  --color-surface: #221D18;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0E0C09;
-    --foreground: #F9F5F0;
-  }
+@theme {
+  --color-side: var(--color-side);
+  --color-side-edge: var(--color-side-edge);
+  --color-side-divider: var(--color-side-divider);
+  --color-side-text: var(--color-side-text);
+  --color-gold: var(--color-gold);
+  --color-gold-soft: var(--color-gold-soft);
+  --color-gold-line: var(--color-gold-line);
+  --color-chip-border: var(--color-chip-border);
+  --color-bg: var(--color-bg);
+  --color-card: var(--color-card);
+  --color-stat: var(--color-stat);
+  --color-line: var(--color-line);
+  --color-ink: var(--color-ink);
+  --color-green: var(--color-green);
+  --color-red: var(--color-red);
+  --color-surface: var(--color-surface);
+}
+
+/* Ensure form elements and tables strictly adhere to theme */
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+  border-color: var(--color-line);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-side-text);
+  opacity: 0.75;
+}
+
+select option {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+}
+
+table th {
+  background-color: var(--color-stat);
+  color: var(--color-side-text);
+  border-color: var(--color-line);
+}
+
+table td {
+  border-color: var(--color-line);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-ink);
   margin: 0;
   padding: 0;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 @layer utilities {

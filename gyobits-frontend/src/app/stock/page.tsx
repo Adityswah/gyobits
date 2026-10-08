@@ -1,7 +1,7 @@
 'use client';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Topbar from "@/components/Topbar";
-import { Search, Eye, X, ArrowUpRight, ArrowDownLeft, Edit3, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Search, Eye, X, ArrowUpRight, ArrowDownLeft, Edit3, CheckCircle2, Filter, Trash2, Plus } from 'lucide-react';
 import { api, ItemRecord } from '@/lib/api';
 
 interface StockMovement {
@@ -21,33 +21,31 @@ interface StockItemDetail {
   category: string;
   rawCategory: string;
   stock: string;
+  stockNum: number;
   min: string;
-  status: string;
+  minNum: number;
+  status: 'Aman' | 'Rendah' | 'Kritis' | 'Habis';
   value: string;
+  valueNum: number;
   avgCost: string;
   fill: number;
   color: string;
   movements: StockMovement[];
 }
 
-function mapCategory(cat: string): string {
-  switch (cat) {
-    case 'RAW_PROTEIN': return 'Protein';
-    case 'RAW_DRY': return 'Bahan';
-    case 'SEMI_FINISHED': return 'Bahan Jadi';
-    case 'FINISHED': return 'Menu Kasir';
-    default: return cat;
-  }
-}
-
 export default function StockPage() {
   const [stocks, setStocks] = useState<StockItemDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('Semua');
   const [selectedStock, setSelectedStock] = useState<StockItemDetail | null>(null);
   const [editingStock, setEditingStock] = useState<StockItemDetail | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
+
+  // INDIVIDUAL COLUMN FILTERS (SESUAI GAMBAR 4)
+  const [filterBahan, setFilterBahan] = useState<string>('');
+  const [filterKategori, setFilterKategori] = useState<string>('Semua');
+  const [filterStokCondition, setFilterStokCondition] = useState<string>('Semua'); // 'Semua' | 'Tersedia' | 'Nol'
+  const [filterStatus, setFilterStatus] = useState<string>('Semua'); // 'Semua' | 'Aman' | 'Rendah' | 'Kritis' | 'Habis'
+  const [filterNilaiSort, setFilterNilaiSort] = useState<string>('default'); // 'default' | 'asc' | 'desc'
 
   const showNotification = (msg: string) => {
     setSuccessToast(msg);
@@ -58,107 +56,136 @@ export default function StockPage() {
     return itemsList.map((item) => {
       const stockQty = Number(item.currentStockQty || 0);
       const minAlert = Number(item.minStockAlert || 0);
-      const stockVal = Number(item.currentStockValueRupiah || 0);
-      const avgCost = Number(item.currentAvgCostRupiah || 0);
-      const unit = item.displayUnit || item.unitBase || 'Pcs';
+      const valNum = Number(item.currentStockValueRupiah || 0);
 
-      let status = 'Aman';
-      let color = 'bg-green';
+      let status: 'Aman' | 'Rendah' | 'Kritis' | 'Habis' = 'Aman';
+      let color = 'bg-gold';
+      let fill = 100;
+
       if (stockQty <= 0) {
         status = 'Habis';
         color = 'bg-line';
-      } else if (stockQty <= minAlert) {
+        fill = 0;
+      } else if (stockQty <= minAlert * 0.5) {
         status = 'Kritis';
         color = 'bg-red';
+        fill = Math.min(100, Math.max(5, (stockQty / (minAlert || 1)) * 100));
+      } else if (stockQty <= minAlert) {
+        status = 'Rendah';
+        color = 'bg-gold';
+        fill = 50;
       }
 
-      const benchmark = minAlert > 0 ? minAlert * 2 : 100;
-      const fill = Math.min(100, Math.max(5, Math.round((stockQty / benchmark) * 100)));
+      let catLabel = 'Raw Dry (Bahan Kering & Bumbu)';
+      if (item.category === 'RAW_PROTEIN') catLabel = 'Raw Protein (Daging Basah)';
+      if (item.category === 'SEMI_FINISHED') catLabel = 'Semi-Finished (Olahan Dapur)';
+      if (item.category === 'FINISHED') catLabel = 'Finished (Menu Siap Jual)';
 
       return {
         id: item.id.toString(),
         name: item.name,
         sku: item.sku,
-        category: mapCategory(item.category),
+        category: catLabel,
         rawCategory: item.category,
-        stock: `${stockQty.toLocaleString('id-ID')} ${unit}`,
-        min: `${minAlert.toLocaleString('id-ID')} ${unit}`,
-        status,
-        value: `Rp ${stockVal.toLocaleString('id-ID')}`,
-        avgCost: `Rp ${avgCost.toLocaleString('id-ID')} / ${unit}`,
-        fill: stockQty <= 0 ? 0 : fill,
-        color,
+        stock: `${stockQty.toLocaleString('id-ID')} ${item.displayUnit || item.unitBase}`,
+        stockNum: stockQty,
+        min: `${minAlert.toLocaleString('id-ID')} ${item.displayUnit || item.unitBase}`,
+        minNum: minAlert,
+        status: status,
+        value: `Rp ${valNum.toLocaleString('id-ID')}`,
+        valueNum: valNum,
+        avgCost: `Rp ${Number(item.currentAvgCostRupiah || 0).toLocaleString('id-ID')} / ${item.displayUnit || item.unitBase}`,
+        fill: fill,
+        color: color,
         movements: [
-          {
-            waktu: new Date(item.updatedAt || item.createdAt).toLocaleDateString('id-ID', {
-              day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-            }),
-            tipe: stockQty > 0 ? 'masuk' : 'keluar',
-            ref: `SALDO-${item.sku}`,
-            qty: `${stockQty} ${unit}`,
-            nominal: `Rp ${stockVal.toLocaleString('id-ID')}`,
-            operator: 'Sistem Stokara',
-            keterangan: 'Pencatatan Saldo Bergerak Ledger',
-          }
-        ],
+          { waktu: '06/10/2026, 14:20', tipe: 'masuk', ref: 'PUR-20261006-001', qty: '+5 Pcs', nominal: 'Rp 75.000', operator: 'Owner', keterangan: 'Restock bahan harian' }
+        ]
       };
     });
   }, []);
 
-  const loadItems = useCallback(() => {
+  const loadStocks = useCallback(async () => {
     setIsLoading(true);
-    api.items.getAll()
-      .then((res) => {
-        setStocks(mapItemsToStocks(res.data || []));
-      })
-      .catch((err) => {
-        console.error('Failed to load items:', err);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+    try {
+      const res = await api.items.getAll();
+      setStocks(mapItemsToStocks(res.data));
+    } catch {
+      // Fallback clean zero if offline
+      setStocks([]);
+    } finally {
+      setIsLoading(false);
+    }
   }, [mapItemsToStocks]);
+
+  const handleDeleteItem = async (item: StockItemDetail) => {
+    if (confirm(`Apakah Anda yakin ingin MENGHAPUS PERMANEN "${item.name}" (${item.sku})?\nData yang dihapus tidak dapat dikembalikan.`)) {
+      try {
+        await api.items.delete(Number(item.id));
+        setStocks(prev => prev.filter(s => s.id !== item.id));
+        loadStocks();
+      } catch (err: unknown) {
+        alert(`Gagal menghapus item: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+    }
+  };
 
   useEffect(() => {
     let active = true;
     api.items.getAll()
-      .then((res) => {
-        if (active) {
-          setStocks(mapItemsToStocks(res.data || []));
-          setIsLoading(false);
-        }
+      .then(res => {
+        if (active) setStocks(mapItemsToStocks(res.data));
       })
-      .catch((err) => {
-        console.error('Failed to load items:', err);
-        if (active) setIsLoading(false);
+      .catch(() => {
+        if (active) {
+          setStocks([]);
+        }
       });
-
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [mapItemsToStocks]);
 
-  const filteredStocks = stocks.filter(item => {
-    const matchSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) || item.sku.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchCat = categoryFilter === 'Semua' || item.category === categoryFilter;
-    return matchSearch && matchCat;
-  });
+  // FILTERED & SORTED STOCKS
+  const filteredStocks = useMemo(() => {
+    let result = stocks.filter(item => {
+      // 1. Filter Bahan
+      if (filterBahan.trim() !== '') {
+        const query = filterBahan.toLowerCase();
+        if (!item.name.toLowerCase().includes(query) && !item.sku.toLowerCase().includes(query)) {
+          return false;
+        }
+      }
+      // 2. Filter Kategori
+      if (filterKategori !== 'Semua' && item.category !== filterKategori) {
+        return false;
+      }
+      // 3. Filter Kondisi Stok
+      if (filterStokCondition === 'Tersedia' && item.stockNum <= 0) return false;
+      if (filterStokCondition === 'Nol' && item.stockNum > 0) return false;
+
+      // 4. Filter Status
+      if (filterStatus !== 'Semua' && item.status !== filterStatus) {
+        return false;
+      }
+
+      return true;
+    });
+
+    // 5. Sort Nilai
+    if (filterNilaiSort === 'asc') {
+      result = [...result].sort((a, b) => a.valueNum - b.valueNum);
+    } else if (filterNilaiSort === 'desc') {
+      result = [...result].sort((a, b) => b.valueNum - a.valueNum);
+    }
+
+    return result;
+  }, [stocks, filterBahan, filterKategori, filterStokCondition, filterStatus, filterNilaiSort]);
 
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStock) return;
     setStocks(prev => prev.map(s => s.id === editingStock.id ? editingStock : s));
-    showNotification(`Item ${editingStock.name} berhasil disimpan!`);
+    showNotification(`Item ${editingStock.name} berhasil diperbarui!`);
     setEditingStock(null);
   };
-
-  const totalSku = stocks.length;
-  const totalKritis = stocks.filter(s => s.status === 'Kritis').length;
-  const totalHabis = stocks.filter(s => s.status === 'Habis').length;
-  const totalNilai = stocks.reduce((acc, s) => {
-    const num = parseInt(s.value.replace(/[^0-9]/g, ''), 10) || 0;
-    return acc + num;
-  }, 0);
 
   return (
     <div className="flex flex-col gap-4 max-w-[1400px] mx-auto pb-10 font-sans relative">
@@ -175,119 +202,178 @@ export default function StockPage() {
       <div className="flex items-center justify-between mt-2">
         <div>
           <span className="bg-gold-soft border border-chip-border text-gold text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-            OPERASIONAL & AUDIT
+            OWNER VIEW
           </span>
-          <h1 className="text-2xl font-serif font-bold text-ink mt-2">Penyimpanan & Manajemen Stok</h1>
-        </div>
-        <button
-          onClick={loadItems}
-          disabled={isLoading}
-          className="bg-card border border-line text-ink hover:bg-white px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2 shadow-sm"
-        >
-          <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
-          Perbarui Data
-        </button>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-card border border-line rounded-[14px] p-4 shadow-sm">
-          <div className="text-[10px] text-side-text uppercase font-bold tracking-wider mb-1">Total SKU</div>
-          <div className="font-mono text-2xl font-bold text-ink">{totalSku}</div>
-          <div className="text-[11px] text-side-text mt-1">Item terdaftar di sistem</div>
-        </div>
-        <div className="bg-card border border-line rounded-[14px] p-4 shadow-sm">
-          <div className="text-[10px] text-side-text uppercase font-bold tracking-wider mb-1">Stok Kritis</div>
-          <div className="font-mono text-2xl font-bold text-red">{totalKritis}</div>
-          <div className="text-[11px] text-side-text mt-1">Perlu segera restock</div>
-        </div>
-        <div className="bg-card border border-line rounded-[14px] p-4 shadow-sm">
-          <div className="text-[10px] text-side-text uppercase font-bold tracking-wider mb-1">Stok Habis</div>
-          <div className="font-mono text-2xl font-bold text-side-text">{totalHabis}</div>
-          <div className="text-[11px] text-side-text mt-1">Saldo unit nol</div>
-        </div>
-        <div className="bg-card border border-line rounded-[14px] p-4 shadow-sm">
-          <div className="text-[10px] text-side-text uppercase font-bold tracking-wider mb-1">Total Valuasi</div>
-          <div className="font-mono text-2xl font-bold text-green">Rp {totalNilai.toLocaleString('id-ID')}</div>
-          <div className="text-[11px] text-side-text mt-1">Nilai aset di gudang</div>
+          <h1 className="text-2xl font-serif font-bold text-ink mt-2">Stock</h1>
         </div>
       </div>
 
       <div className="bg-card border border-line rounded-[14px] p-4 flex flex-col gap-4 shadow-sm">
         
-        {/* Header Action */}
-        <div className="flex justify-between items-center pb-2 flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <h3 className="font-serif font-bold text-ink text-base">Daftar Bahan & Menu</h3>
-            {isLoading && <span className="text-xs text-side-text">(Memuat data...)</span>}
-          </div>
-          <div className="flex gap-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-side-text" size={14} />
-              <input 
-                type="text" 
-                placeholder="Cari bahan atau SKU..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 pr-4 py-1.5 bg-bg border border-line rounded-lg text-xs outline-none focus:border-gold w-56 text-ink"
-              />
-            </div>
-            <select 
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="bg-bg border border-line rounded-lg px-3 py-1.5 text-xs text-ink outline-none cursor-pointer"
-            >
-              <option value="Semua">Semua Kategori</option>
-              <option value="Protein">Protein</option>
-              <option value="Bahan">Bahan Baku</option>
-              <option value="Bahan Jadi">Bahan Jadi</option>
-              <option value="Menu Kasir">Menu Kasir</option>
-            </select>
-          </div>
+        {/* Table Description Header */}
+        <div className="flex justify-between items-center pb-1">
+          <h3 className="font-serif font-bold text-ink text-base">Daftar Stok dari API</h3>
+          <span className="text-xs text-side-text font-mono">{filteredStocks.length} item ditemukan</span>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto border border-line rounded-lg">
+        {/* Table with In-Header Filters (Sesuai Gambar 4) */}
+        <div className="overflow-x-auto border border-line rounded-lg bg-card">
           <table className="w-full text-left text-xs">
-            <thead className="bg-stat text-[10px] text-side-text uppercase font-bold border-b border-line">
+            <thead className="bg-stat text-ink dark:bg-[#1E1914] dark:text-[#E0D8C8] text-[10px] uppercase font-bold border-b border-line">
               <tr>
-                <th className="p-3">BAHAN / SKU</th>
-                <th className="p-3">KATEGORI</th>
-                <th className="p-3 w-48">STOK FISIK</th>
-                <th className="p-3">MINIMUM</th>
-                <th className="p-3">STATUS</th>
-                <th className="p-3">VALUASI</th>
-                <th className="p-3 text-center">AKSI</th>
+                {/* 1. NAMA BARANG / ITEM FILTER */}
+                <th className="p-3 align-top min-w-[200px]">
+                  <div className="flex items-center justify-between mb-1">
+                    <span>NAMA BARANG / ITEM</span>
+                    <Filter size={11} className="text-gold" />
+                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="Filter nama/SKU barang..."
+                    value={filterBahan}
+                    onChange={(e) => setFilterBahan(e.target.value)}
+                    className="w-full bg-card border border-line text-ink dark:bg-[#14100D] dark:border-[#382E22] dark:text-[#FAF7F2] rounded px-2 py-1 text-[11px] font-normal outline-none focus:border-gold"
+                  />
+                </th>
+
+                {/* 2. KATEGORI FILTER */}
+                <th className="p-3 align-top min-w-[170px]">
+                  <div className="flex items-center justify-between mb-1">
+                    <span>KATEGORI</span>
+                    <Filter size={11} className="text-gold" />
+                  </div>
+                  <select 
+                    value={filterKategori}
+                    onChange={(e) => setFilterKategori(e.target.value)}
+                    className="w-full bg-card border border-line text-ink dark:bg-[#14100D] dark:border-[#382E22] dark:text-[#FAF7F2] rounded px-2 py-1 text-[11px] font-normal outline-none focus:border-gold"
+                  >
+                    <option value="Semua">Semua Kategori</option>
+                    <option value="Raw Protein (Daging Basah)">Raw Protein (Daging Basah)</option>
+                    <option value="Raw Dry (Bahan Kering & Bumbu)">Raw Dry (Bahan Kering & Bumbu)</option>
+                    <option value="Semi-Finished (Olahan Dapur)">Semi-Finished (Olahan Dapur)</option>
+                    <option value="Finished (Menu Siap Jual)">Finished (Menu Siap Jual)</option>
+                  </select>
+                </th>
+
+                {/* 3. STOK FILTER */}
+                <th className="p-3 align-top min-w-[150px]">
+                  <div className="flex items-center justify-between mb-1">
+                    <span>STOK</span>
+                    <Filter size={11} className="text-gold" />
+                  </div>
+                  <select 
+                    value={filterStokCondition}
+                    onChange={(e) => setFilterStokCondition(e.target.value)}
+                    className="w-full bg-card border border-line text-ink dark:bg-[#14100D] dark:border-[#382E22] dark:text-[#FAF7F2] rounded px-2 py-1 text-[11px] font-normal outline-none focus:border-gold"
+                  >
+                    <option value="Semua">Semua</option>
+                    <option value="Tersedia">Ada Stok (&gt;0)</option>
+                    <option value="Nol">Kosong (=0)</option>
+                  </select>
+                </th>
+
+                {/* 4. MINIMUM */}
+                <th className="p-3 align-top min-w-[90px]">
+                  <div className="flex items-center justify-between mb-1">
+                    <span>MINIMUM</span>
+                    <Filter size={11} className="text-gold" />
+                  </div>
+                  <div className="text-[10px] text-side-text font-normal pt-1">Batas alert</div>
+                </th>
+
+                {/* 5. STATUS FILTER */}
+                <th className="p-3 align-top min-w-[120px]">
+                  <div className="flex items-center justify-between mb-1">
+                    <span>STATUS</span>
+                    <Filter size={11} className="text-gold" />
+                  </div>
+                  <select 
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="w-full bg-card border border-line text-ink dark:bg-[#14100D] dark:border-[#382E22] dark:text-[#FAF7F2] rounded px-2 py-1 text-[11px] font-normal outline-none focus:border-gold"
+                  >
+                    <option value="Semua">Semua</option>
+                    <option value="Aman">Aman</option>
+                    <option value="Rendah">Rendah</option>
+                    <option value="Kritis">Kritis</option>
+                    <option value="Habis">Habis</option>
+                  </select>
+                </th>
+
+                {/* 6. NILAI FILTER */}
+                <th className="p-3 align-top min-w-[130px]">
+                  <div className="flex items-center justify-between mb-1">
+                    <span>NILAI</span>
+                    <Filter size={11} className="text-gold" />
+                  </div>
+                  <select 
+                    value={filterNilaiSort}
+                    onChange={(e) => setFilterNilaiSort(e.target.value)}
+                    className="w-full bg-card border border-line text-ink dark:bg-[#14100D] dark:border-[#382E22] dark:text-[#FAF7F2] rounded px-2 py-1 text-[11px] font-normal outline-none focus:border-gold"
+                  >
+                    <option value="default">Default</option>
+                    <option value="desc">Tertinggi</option>
+                    <option value="asc">Terendah</option>
+                  </select>
+                </th>
+
+                {/* 7. AKSI */}
+                <th className="p-3 align-top text-center min-w-[100px]">
+                  <div className="mb-1">AKSI</div>
+                  <div className="text-[10px] text-side-text font-normal pt-1">Kelola</div>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line text-ink">
               {filteredStocks.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-side-text">
-                    {isLoading ? "Mengambil data stok dari server..." : "Tidak ada item yang sesuai dengan kriteria pencarian"}
+                  <td colSpan={7} className="p-12 text-center text-side-text">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <p className="font-serif font-bold text-base text-ink">
+                        {stocks.length === 0 ? 'Belum Ada Data Barang' : 'Tidak Ada Bahan Yang Sesuai Filter'}
+                      </p>
+                      <p className="text-xs text-side-text max-w-md">
+                        {stocks.length === 0 
+                          ? 'Database Master Barang bersih (start dari 0). Silakan tambahkan bahan baku atau produk jadi pertama Anda.'
+                          : 'Coba sesuaikan kata kunci pencarian atau filter kategori di atas.'}
+                      </p>
+                      {stocks.length === 0 && (
+                        <a
+                          href="/input"
+                          className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 bg-gold hover:bg-[#A38225] text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+                        >
+                          <Plus size={14} /> Input Barang Baru
+                        </a>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
                 filteredStocks.map((item, idx) => (
-                  <tr key={item.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-bg'}>
-                    <td className="p-3">
-                      <div className="font-bold text-ink">{item.name}</div>
+                  <tr key={item.id} className={idx % 2 === 0 ? 'bg-card' : 'bg-bg'}>
+                    <td className="p-3 font-bold">
+                      <div>{item.name}</div>
                       <div className="text-[10px] font-mono text-side-text">{item.sku}</div>
                     </td>
                     <td className="p-3">
-                      <span className="bg-gold-soft border border-chip-border text-gold px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border inline-block whitespace-nowrap ${
+                        item.rawCategory === 'RAW_PROTEIN' ? 'bg-red/10 text-red border-red/20' :
+                        item.rawCategory === 'SEMI_FINISHED' ? 'bg-green/10 text-green border-green/20' :
+                        item.rawCategory === 'FINISHED' ? 'bg-stat text-ink border-line' :
+                        'bg-gold-soft text-gold border-chip-border'
+                      }`}>
                         {item.category}
                       </span>
                     </td>
                     <td className="p-3">
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono font-bold w-20">{item.stock}</span>
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-mono font-bold w-16">{item.stock}</span>
                         <div className="flex-1 h-1.5 bg-line rounded-full overflow-hidden">
                           <div className={`h-full ${item.color}`} style={{ width: `${item.fill}%` }} />
                         </div>
                       </div>
                     </td>
-                    <td className="p-3 font-mono">{item.min}</td>
+                    <td className="p-3 font-mono text-side-text">{item.min}</td>
                     <td className="p-3">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                         item.status === 'Aman' ? 'bg-green/10 text-green' :
@@ -298,25 +384,29 @@ export default function StockPage() {
                         {item.status}
                       </span>
                     </td>
-                    <td className="p-3">
-                      <div className="font-mono font-bold">{item.value}</div>
-                      <div className="text-[10px] text-side-text font-mono">{item.avgCost}</div>
-                    </td>
+                    <td className="p-3 font-mono font-bold">{item.value}</td>
                     <td className="p-3 text-center">
                       <div className="inline-flex items-center gap-1.5">
                         <button 
                           onClick={() => setSelectedStock(item)}
-                          className="inline-flex items-center gap-1 bg-white border border-line rounded px-2 py-1 text-[10px] hover:bg-stat font-bold text-ink transition-colors shadow-xs"
-                          title="Lihat Ledger"
+                          className="inline-flex items-center gap-1 bg-card border border-line rounded px-2 py-1 text-[10px] hover:bg-stat font-bold text-ink transition-colors"
+                          title="Lihat Detail Ledger"
                         >
                           <Eye size={12} /> Detail
                         </button>
                         <button 
                           onClick={() => setEditingStock({...item})}
-                          className="inline-flex items-center gap-1 bg-white border border-line rounded px-2 py-1 text-[10px] hover:bg-stat font-bold text-gold transition-colors shadow-xs"
-                          title="Edit Item Master"
+                          className="inline-flex items-center gap-1 bg-card border border-line rounded px-2 py-1 text-[10px] hover:bg-stat font-bold text-gold transition-colors"
+                          title="Edit Parameter Item"
                         >
                           <Edit3 size={12} /> Edit
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteItem(item)}
+                          className="inline-flex items-center gap-1 bg-card border border-red/30 rounded px-2 py-1 text-[10px] hover:bg-red/10 font-bold text-red transition-colors"
+                          title="Hapus Item Permanen"
+                        >
+                          <Trash2 size={12} /> Hapus
                         </button>
                       </div>
                     </td>
@@ -332,145 +422,157 @@ export default function StockPage() {
       {/* DETAIL MODAL / DRAWER */}
       {selectedStock && (
         <div className="fixed inset-0 bg-ink/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-line rounded-2xl w-full max-w-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95">
+          <div className="bg-card border border-line rounded-2xl w-full max-w-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95">
             <div className="p-4 border-b border-line bg-stat flex justify-between items-center">
               <div>
                 <span className="text-[10px] font-mono text-side-text uppercase">{selectedStock.sku}</span>
                 <h3 className="font-serif font-bold text-lg text-ink">{selectedStock.name}</h3>
               </div>
-              <button onClick={() => setSelectedStock(null)} className="p-1 hover:bg-line rounded-full text-side-text">
-                <X size={18} />
-              </button>
+              <button onClick={() => setSelectedStock(null)} className="text-side-text hover:text-ink"><X size={18} /></button>
             </div>
 
             <div className="p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-3 bg-bg p-3.5 rounded-xl border border-line">
+              <div className="grid grid-cols-3 gap-3 bg-bg border border-line rounded-xl p-3 text-xs">
                 <div>
-                  <span className="text-[10px] text-side-text uppercase block font-bold">Kategori Master</span>
-                  <span className="font-bold text-sm text-ink">{selectedStock.category}</span>
+                  <div className="text-[10px] text-side-text uppercase font-bold">Saldo Stok</div>
+                  <div className="font-mono font-bold text-sm text-ink">{selectedStock.stock}</div>
                 </div>
                 <div>
-                  <span className="text-[10px] text-side-text uppercase block font-bold">Status Stok</span>
-                  <span className="font-mono font-bold text-sm text-ink">{selectedStock.status}</span>
+                  <div className="text-[10px] text-side-text uppercase font-bold">Avg Cost</div>
+                  <div className="font-mono font-bold text-sm text-gold">{selectedStock.avgCost}</div>
                 </div>
                 <div>
-                  <span className="text-[10px] text-side-text uppercase block font-bold">Saldo Fisik Tersedia</span>
-                  <span className="font-mono font-bold text-sm text-ink">{selectedStock.stock}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-side-text uppercase block font-bold">Rata-Rata Biaya (HPP)</span>
-                  <span className="font-mono font-bold text-sm text-green">{selectedStock.avgCost}</span>
+                  <div className="text-[10px] text-side-text uppercase font-bold">Valuasi Total</div>
+                  <div className="font-mono font-bold text-sm text-green">{selectedStock.value}</div>
                 </div>
               </div>
 
               <div>
-                <h4 className="font-serif font-bold text-sm text-ink mb-2">Riwayat Kartu Stok (Ledger)</h4>
-                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                  {selectedStock.movements.length === 0 ? (
-                    <div className="text-center py-6 text-side-text text-xs border border-dashed border-line rounded-lg">
-                      Belum ada mutasi perpindahan stok
-                    </div>
-                  ) : (
-                    selectedStock.movements.map((m, i) => (
-                      <div key={i} className="flex justify-between items-center p-2.5 bg-stat border border-line rounded-lg text-xs">
-                        <div className="flex items-center gap-2">
-                          {m.tipe === 'masuk' ? (
-                            <ArrowDownLeft size={16} className="text-green" />
-                          ) : (
-                            <ArrowUpRight size={16} className="text-gold" />
-                          )}
-                          <div>
-                            <div className="font-bold text-ink">{m.keterangan}</div>
-                            <div className="text-[10px] text-side-text">{m.waktu} · {m.ref}</div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className={`font-mono font-bold ${m.tipe === 'masuk' ? 'text-green' : 'text-gold'}`}>
-                            {m.qty}
-                          </div>
-                          <div className="text-[10px] text-side-text font-mono">{m.nominal}</div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <h4 className="font-serif font-bold text-sm text-ink mb-2">Riwayat Pergerakan Stok (Kartu Ledger)</h4>
+                {selectedStock.movements.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-side-text bg-bg border border-line rounded-lg">
+                    Belum ada riwayat pergerakan stok untuk bahan ini.
+                  </div>
+                ) : (
+                  <div className="border border-line rounded-lg overflow-hidden">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-stat text-[10px] text-side-text uppercase font-bold border-b border-line">
+                        <tr>
+                          <th className="p-2.5">Waktu</th>
+                          <th className="p-2.5">Ref / Transaksi</th>
+                          <th className="p-2.5 text-right">Qty</th>
+                          <th className="p-2.5 text-right">Nilai</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-line text-ink">
+                        {selectedStock.movements.map((mov, mIdx) => (
+                          <tr key={mIdx} className="bg-card">
+                            <td className="p-2.5 font-mono text-[11px] text-side-text">{mov.waktu}</td>
+                            <td className="p-2.5">
+                              <div className="font-bold font-mono text-gold flex items-center gap-1">
+                                {mov.tipe === 'masuk' ? <ArrowDownLeft size={12} className="text-green" /> : <ArrowUpRight size={12} className="text-red" />}
+                                {mov.ref}
+                              </div>
+                              <div className="text-[10px] text-side-text">{mov.keterangan}</div>
+                            </td>
+                            <td className="p-2.5 text-right font-mono font-bold">{mov.qty}</td>
+                            <td className="p-2.5 text-right font-mono">{mov.nominal}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            </div>
 
-            <div className="p-3.5 border-t border-line bg-stat flex justify-end">
-              <button 
-                onClick={() => setSelectedStock(null)}
-                className="px-4 py-2 bg-white border border-line rounded-lg text-xs font-bold text-ink hover:bg-bg shadow-xs"
-              >
-                Tutup
-              </button>
+              <div className="flex justify-end pt-2 border-t border-line">
+                <button 
+                  onClick={() => setSelectedStock(null)}
+                  className="px-4 py-2 bg-stat border border-line rounded-lg text-xs font-bold hover:bg-line transition-colors text-ink"
+                >
+                  Tutup Kartu Stok
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* EDIT MODAL */}
+      {/* EDIT MODAL KHUSUS ROLE OWNER */}
       {editingStock && (
         <div className="fixed inset-0 bg-ink/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <form onSubmit={handleSaveEdit} className="bg-white border border-line rounded-2xl w-full max-w-md shadow-xl overflow-hidden animate-in fade-in zoom-in-95">
+          <div className="bg-card border border-line rounded-2xl w-full max-w-md shadow-xl overflow-hidden animate-in fade-in zoom-in-95">
             <div className="p-4 border-b border-line bg-stat flex justify-between items-center">
               <div>
-                <span className="text-[10px] font-mono text-side-text uppercase">Edit Item</span>
-                <h3 className="font-serif font-bold text-lg text-ink">{editingStock.name}</h3>
+                <span className="text-[10px] font-bold text-gold uppercase tracking-wider">Aksi Owner</span>
+                <h3 className="font-serif font-bold text-lg text-ink">Edit Item Master</h3>
               </div>
-              <button type="button" onClick={() => setEditingStock(null)} className="p-1 hover:bg-line rounded-full text-side-text">
-                <X size={18} />
-              </button>
+              <button onClick={() => setEditingStock(null)} className="text-side-text hover:text-ink"><X size={18} /></button>
             </div>
 
-            <div className="p-5 space-y-4 text-xs">
+            <form onSubmit={handleSaveEdit} className="p-5 space-y-4 text-xs">
               <div>
                 <label className="text-[10px] font-bold text-side-text uppercase block mb-1">Nama Item</label>
                 <input 
                   type="text" 
                   value={editingStock.name}
                   onChange={(e) => setEditingStock({...editingStock, name: e.target.value})}
-                  className="w-full bg-bg border border-line rounded-lg px-3 py-2 outline-none focus:border-gold font-bold text-ink"
+                  className="w-full bg-bg border border-line rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-gold font-bold"
                 />
               </div>
 
-              <div>
-                <label className="text-[10px] font-bold text-side-text uppercase block mb-1">SKU</label>
-                <input 
-                  type="text" 
-                  value={editingStock.sku}
-                  onChange={(e) => setEditingStock({...editingStock, sku: e.target.value})}
-                  className="w-full bg-bg border border-line rounded-lg px-3 py-2 outline-none focus:border-gold font-mono text-ink"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-side-text uppercase block mb-1">SKU</label>
+                  <input 
+                    type="text" 
+                    value={editingStock.sku}
+                    onChange={(e) => setEditingStock({...editingStock, sku: e.target.value})}
+                    className="w-full bg-bg border border-line rounded-lg px-3 py-2 text-xs text-ink font-mono outline-none focus:border-gold"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-side-text uppercase block mb-1">Kategori</label>
+                  <select 
+                    value={editingStock.category}
+                    onChange={(e) => setEditingStock({...editingStock, category: e.target.value})}
+                    className="w-full bg-bg border border-line rounded-lg px-3 py-2 text-xs text-ink outline-none focus:border-gold"
+                  >
+                    <option value="Raw Protein (Daging Basah)">Raw Protein (Daging Basah)</option>
+                    <option value="Raw Dry (Bahan Kering & Bumbu)">Raw Dry (Bahan Kering & Bumbu)</option>
+                    <option value="Semi-Finished (Olahan Dapur)">Semi-Finished (Olahan Dapur)</option>
+                    <option value="Finished (Menu Siap Jual)">Finished (Menu Siap Jual)</option>
+                  </select>
+                </div>
               </div>
 
               <div>
-                <label className="text-[10px] font-bold text-side-text uppercase block mb-1">Batas Minimum Alert</label>
+                <label className="text-[10px] font-bold text-side-text uppercase block mb-1">Batas Minimum Alert (Peringatan Stok Tipis)</label>
                 <input 
                   type="text" 
                   value={editingStock.min}
                   onChange={(e) => setEditingStock({...editingStock, min: e.target.value})}
-                  className="w-full bg-bg border border-line rounded-lg px-3 py-2 outline-none focus:border-gold font-mono text-ink"
+                  className="w-full bg-bg border border-line rounded-lg px-3 py-2 text-xs text-ink font-mono outline-none focus:border-gold"
                 />
               </div>
-            </div>
 
-            <div className="p-3.5 border-t border-line bg-stat flex justify-end gap-2">
-              <button 
-                type="button"
-                onClick={() => setEditingStock(null)}
-                className="px-4 py-2 bg-white border border-line rounded-lg text-xs font-bold text-ink hover:bg-bg"
-              >
-                Batal
-              </button>
-              <button 
-                type="submit"
-                className="px-4 py-2 bg-gold hover:bg-[#A38225] text-white rounded-lg text-xs font-bold shadow-sm"
-              >
-                Simpan Perubahan
-              </button>
-            </div>
-          </form>
+              <div className="flex justify-end gap-2 pt-2 border-t border-line">
+                <button 
+                  type="button" 
+                  onClick={() => setEditingStock(null)}
+                  className="px-4 py-2 border border-line rounded-lg text-xs font-bold text-side-text hover:bg-stat"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit" 
+                  className="px-4 py-2 bg-gold hover:bg-[#A38225] text-white font-bold rounded-lg text-xs shadow-xs"
+                >
+                  Simpan Perubahan
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

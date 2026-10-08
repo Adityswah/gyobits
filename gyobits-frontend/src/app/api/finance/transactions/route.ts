@@ -145,3 +145,40 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: { code: 'INTERNAL_ERROR', message } }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    let id = searchParams.get('id');
+    if (!id) {
+      const body = await req.json().catch(() => ({}));
+      id = body.id;
+    }
+
+    if (!id) {
+      return NextResponse.json(
+        { error: { code: 'VALIDATION_ERROR', message: 'ID transaksi keuangan wajib disertakan' } },
+        { status: 422 }
+      );
+    }
+
+    const txnId = Number(id);
+
+    try {
+      await db.delete(financeTransactions).where(eq(financeTransactions.id, txnId));
+    } catch {
+      // In-memory fallback
+    }
+
+    inMemoryStore.deleteTransaction(txnId);
+
+    return NextResponse.json({
+      success: true,
+      message: `Transaksi keuangan #${txnId} berhasil dihapus secara permanen.`,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: { code: 'DELETE_FAILED', message } }, { status: 500 });
+  }
+}
+

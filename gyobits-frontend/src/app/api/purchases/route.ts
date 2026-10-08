@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { purchases, purchaseLines, financeTransactions, financeCategories } from '@/db/schema';
+import { purchases, purchaseLines, financeTransactions, financeCategories, stockMovements } from '@/db/schema';
 import { postLedger } from '@/lib/ledger';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, and } from 'drizzle-orm';
 import { inMemoryStore, PurchaseData } from '@/lib/store';
 
 interface PurchaseLineInput {
@@ -209,3 +209,55 @@ export async function POST(req: Request) {
     );
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    let id = searchParams.get('id');
+    if (!id) {
+      const body = await req.json().catch(() => ({}));
+      id = body.id;
+    }
+
+    if (!id) {
+      return NextResponse.json(
+        { error: { code: 'VALIDATION_ERROR', message: 'ID pembelian wajib disertakan' } },
+        { status: 422 }
+      );
+    }
+
+    const purchaseId = Number(id);
+
+    try {
+      await db.transaction(async (tx) => {
+        await tx.delete(purchaseLines).where(eq(purchaseLines.purchaseId, purchaseId));
+        await tx.delete(financeTransactions).where(
+          and(
+            eq(financeTransactions.sourceType, 'PURCHASE'),
+            eq(financeTransactions.sourceId, purchaseId)
+          )
+        );
+        await tx.delete(stockMovements).where(
+          and(
+            eq(stockMovements.referenceType, 'PURCHASE'),
+            eq(stockMovements.referenceId, purchaseId)
+          )
+        );
+        await tx.delete(purchases).where(eq(purchases.id, purchaseId));
+      });
+    } catch {
+      // In-memory fallback
+    }
+
+    inMemoryStore.deletePurchase(purchaseId);
+
+    return NextResponse.json({
+      success: true,
+      message: `Transaksi pembelian #${purchaseId} berhasil dihapus secara permanen.`,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: { code: 'DELETE_FAILED', message } }, { status: 500 });
+  }
+}
+

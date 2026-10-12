@@ -63,6 +63,28 @@ export async function POST(req: Request) {
         })
         .returning();
 
+      if (newItem) {
+        inMemoryStore.addItem({
+          id: newItem.id,
+          sku: newItem.sku,
+          name: newItem.name,
+          category: newItem.category as ItemData['category'],
+          stockMode: newItem.stockMode as ItemData['stockMode'],
+          unitBase: newItem.unitBase,
+          displayUnit: newItem.displayUnit,
+          displayFactor: newItem.displayFactor,
+          currentStockQty: newItem.currentStockQty,
+          currentStockValueRupiah: newItem.currentStockValueRupiah,
+          currentAvgCostRupiah: newItem.currentAvgCostRupiah || '0',
+          oversold: newItem.oversold,
+          minStockAlert: newItem.minStockAlert || '0',
+          sellPriceRupiah: newItem.sellPriceRupiah || '0',
+          isActive: newItem.isActive,
+          createdAt: newItem.createdAt.toISOString(),
+          updatedAt: newItem.updatedAt.toISOString(),
+        });
+      }
+
       return NextResponse.json({ success: true, data: newItem }, { status: 201 });
     } catch {
       // In-memory fallback
@@ -85,7 +107,7 @@ export async function POST(req: Request) {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      inMemoryStore.items.unshift(newItem);
+      inMemoryStore.addItem(newItem);
       return NextResponse.json({ success: true, data: newItem }, { status: 201 });
     }
   } catch (error: unknown) {

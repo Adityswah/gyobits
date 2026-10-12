@@ -53,15 +53,15 @@ export default function PengaturanPage() {
 
   // 1. Satuan State (Sesuai Gambar User)
   const [satuanList, setSatuanList] = useState<string[]>([
-    'Ekor',
-    'Galon',
-    'Kg',
-    'Pax',
+    'G',
+    'ML',
+    'Butir',
+    'Bks',
     'Pcs',
-    'Ikat',
+    'Kg',
+    'L',
     'Botol',
     'Porsi',
-    'Gelas',
   ]);
   const [newSatuanInput, setNewSatuanInput] = useState('');
   const [newSatuanNama, setNewSatuanNama] = useState('');
@@ -106,6 +106,8 @@ export default function PengaturanPage() {
   // Modals
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+  const [isSavingItem, setIsSavingItem] = useState(false);
+  const [isSavingBom, setIsSavingBom] = useState(false);
 
   const [showFinanceModal, setShowFinanceModal] = useState(false);
   const [editingFinanceIndex, setEditingFinanceIndex] = useState<number | null>(null);
@@ -322,11 +324,14 @@ export default function PengaturanPage() {
 
   const handleSaveBom = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (bomBasisQty <= 0 || bomLines.length === 0) {
-      showNotification("Basis Qty harus > 0 dan resep harus memiliki minimal 1 bahan.");
+    if (bomBasisQty <= 0 || bomLines.length === 0 || isSavingBom) {
+      if (bomBasisQty <= 0 || bomLines.length === 0) {
+        showNotification("Basis Qty harus > 0 dan resep harus memiliki minimal 1 bahan.");
+      }
       return;
     }
 
+    setIsSavingBom(true);
     try {
       await api.recipes.create({
         outputItemId: bomOutputId,
@@ -339,6 +344,8 @@ export default function PengaturanPage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Gagal menyimpan resep BOM';
       showNotification(`Error: ${msg}`);
+    } finally {
+      setIsSavingBom(false);
     }
   };
 
@@ -349,8 +356,8 @@ export default function PengaturanPage() {
       sku: `ITM-00${items.length + 1}`,
       name: '',
       category: 'RAW_DRY',
-      unit: 'Pcs',
-      unitBase: 'pcs',
+      unit: 'G',
+      unitBase: 'g',
       stockMode: 'STOCKED',
       sellPrice: undefined
     });
@@ -365,14 +372,15 @@ export default function PengaturanPage() {
 
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!itemForm.sku || !itemForm.name) return;
+    if (!itemForm.sku || !itemForm.name || isSavingItem) return;
+    setIsSavingItem(true);
 
     const itemData: StockItem = {
       sku: itemForm.sku || 'ITM-NEW',
       name: itemForm.name || '',
       category: itemForm.category || 'RAW_DRY',
-      unit: itemForm.unit || 'Pcs',
-      unitBase: itemForm.unitBase || 'pcs',
+      unit: itemForm.unit || 'G',
+      unitBase: itemForm.unitBase || 'g',
       stockMode: itemForm.stockMode || 'STOCKED',
       sellPrice: itemForm.sellPrice
     };
@@ -399,9 +407,10 @@ export default function PengaturanPage() {
     } catch {
       setItems(prev => [...prev, itemData]);
       showNotification(`Item "${itemData.name}" tersimpan!`);
+    } finally {
+      setIsSavingItem(false);
+      setShowItemModal(false);
     }
-
-    setShowItemModal(false);
   };
 
   const handleDeleteItem = async (idx: number) => {

@@ -18,12 +18,13 @@ interface SyncItemPayload {
 function getGyozaPieceCount(itemName: string): number | null {
   const norm = itemName.toLowerCase();
   if (!norm.includes('gyoza')) return null;
+  if (norm.includes('tester')) return 1; // 1 pcs untuk Tester Gyoza
   if (norm.includes('10')) return 10;
   if (norm.includes('8')) return 8;
   if (norm.includes('7')) return 7;
   const match = norm.match(/(?:isi\s*|)(\d+)/);
   if (match) return parseInt(match[1], 10);
-  return null;
+  return 1;
 }
 
 export async function POST(req: Request) {
@@ -279,17 +280,60 @@ export async function POST(req: Request) {
             .returning();
         }
 
-        await tx.insert(financeTransactions).values({
-          txnDate: businessDateStr,
-          kind: 'INCOME',
-          channel: paymentChannel as 'CASH' | 'BANK',
-          categoryId: incomeCat.id,
-          amountRupiah: totalAmount.toString(),
-          sourceType: 'SALE',
-          sourceId: newSale.id,
-          createdBy: userId,
-          note: `Penjualan ${saleCode} (${payment_method})`,
-        });
+        if (totalAmount > 0) {
+          await tx.insert(financeTransactions).values({
+            txnDate: businessDateStr,
+            kind: 'INCOME',
+            channel: paymentChannel as 'CASH' | 'BANK',
+            categoryId: incomeCat.id,
+            amountRupiah: totalAmount.toString(),
+            sourceType: 'SALE',
+            sourceId: newSale.id,
+            createdBy: userId,
+            note: `Penjualan ${saleCode} (${payment_method})`,
+          });
+        }
+
+        // Catat Biaya Tester ke Beban Promosi / Marketing
+        const testerItems = (rawItems as SyncItemPayload[]).filter(i => 
+          Number(i.unit_price) === 0 || i.item_name?.toLowerCase().includes('tester')
+        );
+        if (testerItems.length > 0) {
+          let [marketingCat] = await tx
+            .select()
+            .from(financeCategories)
+            .where(eq(financeCategories.name, 'Biaya Pemasaran / Iklan'));
+
+          if (!marketingCat) {
+            [marketingCat] = await tx
+              .insert(financeCategories)
+              .values({
+                name: 'Biaya Pemasaran / Iklan',
+                kind: 'EXPENSE',
+                isSystem: false,
+              })
+              .returning();
+          }
+
+          const testerCogs = testerItems.reduce((acc, itm) => {
+            const pcs = getGyozaPieceCount(itm.item_name || '') || 1;
+            return acc + (pcs * Number(itm.qty) * 917.14);
+          }, 0);
+
+          if (testerCogs > 0 && marketingCat) {
+            await tx.insert(financeTransactions).values({
+              txnDate: businessDateStr,
+              kind: 'EXPENSE',
+              channel: 'CASH',
+              categoryId: marketingCat.id,
+              amountRupiah: testerCogs.toFixed(0),
+              sourceType: 'SALE',
+              sourceId: newSale.id,
+              createdBy: userId,
+              note: `Beban Promosi / Sampling Tester (${saleCode})`,
+            });
+          }
+        }
 
         // 7. Save Flags if any
         for (const flag of detectedFlags) {
@@ -451,22 +495,55 @@ export async function POST(req: Request) {
       };
       inMemoryStore.sales.unshift(newSale);
 
-      // Record income in finance transactions
-      inMemoryStore.transactions.unshift({
-        id: inMemoryStore.transactions.length + 1,
-        txnDate: businessDateStr,
-        kind: 'INCOME',
-        channel: paymentChannel as 'CASH' | 'BANK',
-        categoryId: 1,
-        categoryName: 'Penjualan Kasir',
-        amountRupiah: totalAmount.toString(),
-        sourceType: 'SALE',
-        sourceId: newSale.id,
-        note: `Penjualan ${saleCode} (${payment_method})`,
-        createdBy: userId,
-        isReversed: false,
-        createdAt: new Date().toISOString(),
-      });
+      // Record income in finance transactions if payment received
+      if (totalAmount > 0) {
+        inMemoryStore.transactions.unshift({
+          id: inMemoryStore.transactions.length + 1,
+          txnDate: businessDateStr,
+          kind: 'INCOME',
+          channel: paymentChannel as 'CASH' | 'BANK',
+          categoryId: 1,
+          categoryName: 'Penjualan Kasir',
+          amountRupiah: totalAmount.toString(),
+          sourceType: 'SALE',
+          sourceId: newSale.id,
+          note: `Penjualan ${saleCode} (${payment_method})`,
+          createdBy: userId,
+          isReversed: false,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      // Record tester expense in fallback
+      const fallbackTesterItems = (rawItems as SyncItemPayload[]).filter(i => 
+        Number(i.unit_price) === 0 || i.item_name?.toLowerCase().includes('tester')
+      );
+      if (fallbackTesterItems.length > 0) {
+        const testerCogs = fallbackTesterItems.reduce((acc, itm) => {
+          const pcs = getGyozaPieceCount(itm.item_name || '') || 1;
+          return acc + (pcs * Number(itm.qty) * 917.14);
+        }, 0);
+
+        if (testerCogs > 0) {
+          inMemoryStore.transactions.unshift({
+            id: inMemoryStore.transactions.length + 1,
+            txnDate: businessDateStr,
+            kind: 'EXPENSE',
+            channel: 'CASH',
+            categoryId: 8,
+            categoryName: 'Biaya Pemasaran / Iklan',
+            amountRupiah: testerCogs.toFixed(0),
+            sourceType: 'SALE',
+            sourceId: newSale.id,
+            note: `Beban Promosi / Sampling Tester (${saleCode})`,
+            createdBy: userId,
+            isReversed: false,
+            createdAt: new Date().toISOString(),
+          });
+        }
+      }
+
+      inMemoryStore.persist();
 
       return NextResponse.json(
         {

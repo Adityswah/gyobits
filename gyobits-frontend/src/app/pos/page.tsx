@@ -21,19 +21,18 @@ interface MenuItem {
 
 const MENU_CATEGORIES = ['Semua', 'Gyoza', 'Minuman', 'Ekstra'];
 
-const VARIANTS_ISI_10: Variant[] = [
-  { id: 'kukus', name: 'Kukus' },
-  { id: 'goreng', name: 'Goreng' },
-  { id: 'grill', name: 'Grill' },
-  { id: 'mix', name: 'Mix' },
-];
-
-const VARIANTS_ISI_8_7: Variant[] = [
+const VARIANTS_ISI_ALL: Variant[] = [
   { id: 'kukus', name: 'Kukus' },
   { id: 'goreng', name: 'Goreng' },
   { id: 'grill', name: 'Grill' },
   { id: 'frozen', name: 'Frozen' },
   { id: 'mix', name: 'Mix' },
+];
+
+const VARIANTS_TESTER: Variant[] = [
+  { id: 'kukus', name: 'Kukus' },
+  { id: 'goreng', name: 'Goreng' },
+  { id: 'grill', name: 'Grill' },
 ];
 
 const OFFICIAL_POS_MENUS: MenuItem[] = [
@@ -43,11 +42,11 @@ const OFFICIAL_POS_MENUS: MenuItem[] = [
     price: 25000,
     category: 'Gyoza',
     image: '/images/gyoza10.jpg',
-    variants: VARIANTS_ISI_10,
+    variants: VARIANTS_ISI_ALL,
   },
   {
     id: 102,
-    name: 'Gyoza Isi 10 Frozen',
+    name: 'Gyoza Forze Isi 10',
     price: 22500,
     category: 'Gyoza',
     image: '/images/gyoza10-frozen.jpg',
@@ -58,7 +57,7 @@ const OFFICIAL_POS_MENUS: MenuItem[] = [
     price: 20000,
     category: 'Gyoza',
     image: '/images/gyoza8.jpg',
-    variants: VARIANTS_ISI_8_7,
+    variants: VARIANTS_ISI_ALL,
   },
   {
     id: 104,
@@ -66,10 +65,18 @@ const OFFICIAL_POS_MENUS: MenuItem[] = [
     price: 20000,
     category: 'Gyoza',
     image: '/images/gyoza7.jpg',
-    variants: VARIANTS_ISI_8_7,
+    variants: VARIANTS_ISI_ALL,
   },
   {
     id: 105,
+    name: 'Tester Gyoza',
+    price: 0,
+    category: 'Gyoza',
+    image: '/images/tester.jpg',
+    variants: VARIANTS_TESTER,
+  },
+  {
+    id: 106,
     name: 'Chili Oil',
     price: 3000,
     category: 'Ekstra',
@@ -84,6 +91,7 @@ interface CartItem {
   item: MenuItem;
   qty: number;
   selectedVariant?: Variant;
+  isTester?: boolean;
 }
 
 interface OutboxTransaction {
@@ -154,8 +162,8 @@ export default function POSPage() {
               cat = 'Ekstra';
             }
 
-            const is10 = lowerName.includes('10');
-            const variants = is10 ? VARIANTS_ISI_10 : VARIANTS_ISI_8_7;
+            const isTester = lowerName.includes('tester');
+            const variants = isTester ? VARIANTS_TESTER : VARIANTS_ISI_ALL;
             combined.push({
               id: item.id,
               name: item.name,
@@ -305,6 +313,7 @@ export default function POSPage() {
   };
 
   const addToCart = (item: MenuItem, variant?: Variant) => {
+    const isDefaultTester = item.name.toLowerCase().includes('tester') || item.price === 0;
     const cartItemId = variant ? `${item.id}-${variant.id}` : `${item.id}`;
     
     setCart(prev => {
@@ -312,10 +321,19 @@ export default function POSPage() {
       if (existing) {
         return prev.map(i => i.id === cartItemId ? { ...i, qty: i.qty + 1 } : i);
       }
-      return [...prev, { id: cartItemId, item, qty: 1, selectedVariant: variant }];
+      return [...prev, { id: cartItemId, item, qty: 1, selectedVariant: variant, isTester: isDefaultTester }];
     });
     
     setSelectedProductForVariant(null);
+  };
+
+  const toggleCartItemTester = (cartItemId: string) => {
+    setCart(prev => prev.map(i => {
+      if (i.id === cartItemId) {
+        return { ...i, isTester: !i.isTester };
+      }
+      return i;
+    }));
   };
 
   const updateQty = (cartItemId: string, delta: number) => {
@@ -332,18 +350,22 @@ export default function POSPage() {
     setCart(prev => prev.filter(i => i.id !== cartItemId));
   };
 
-  const subtotal = cart.reduce((acc, i) => acc + (i.item.price * i.qty), 0);
-  const total = subtotal + shippingCost - discount;
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
 
-  // FAST OPTIMISTIC CHECKOUT (No freeze)
+  const subtotal = cart.reduce((acc, i) => acc + ((i.isTester ? 0 : i.item.price) * i.qty), 0);
+  const total = Math.max(0, subtotal + shippingCost - discount);
+
+  // FAST OPTIMISTIC CHECKOUT (No freeze & Anti-Double-Click)
   const handleCheckout = () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || isCheckingOut) return;
 
     // Check shift if weekend
     if (isWeekend && !shiftStarted) {
       setShowStartShiftModal(true);
       return;
     }
+
+    setIsCheckingOut(true);
 
     const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
       const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -366,7 +388,7 @@ export default function POSPage() {
         item_id: c.item.id,
         item_name: c.selectedVariant ? `${c.item.name} (${c.selectedVariant.name})` : c.item.name,
         qty: c.qty,
-        unit_price: c.item.price,
+        unit_price: c.isTester ? 0 : c.item.price,
         variant_name: c.selectedVariant?.name,
       }))
     };
@@ -394,25 +416,28 @@ export default function POSPage() {
     setOutbox(updatedOutbox);
     localStorage.setItem('stokara_pos_outbox', JSON.stringify(updatedOutbox));
 
-    if (paymentMethod === 'CASH') {
-      setSessionCashIncome(prev => prev + total);
-    } else {
-      setRevenueQRIS(prev => prev + total);
+    if (total > 0) {
+      if (paymentMethod === 'CASH') {
+        setSessionCashIncome(prev => prev + total);
+      } else {
+        setRevenueQRIS(prev => prev + total);
+      }
     }
 
     // Record into global audit log
-    const itemsDescription = cart.map(c => `${c.qty}x ${c.item.name}`).join(', ');
+    const itemsDescription = cart.map(c => `${c.qty}x ${c.item.name}${c.isTester ? ' (TESTER/GRATIS)' : ''}`).join(', ');
     addAuditLog({
       ref: invoiceNumber,
       tipe: 'POS',
       operator: 'Kasir',
       nominal: total,
-      keterangan: `Penjualan POS (${itemsDescription})`
+      keterangan: total === 0 ? `Sampling Tester (${itemsDescription})` : `Penjualan POS (${itemsDescription})`
     });
 
     setCart([]);
     setShippingCost(0);
-    showNotification(`Transaksi ${invoiceNumber} tersimpan!`);
+    showNotification(total === 0 ? `Transaksi Tester ${invoiceNumber} tersimpan (Rp 0)!` : `Transaksi ${invoiceNumber} tersimpan!`);
+    setIsCheckingOut(false);
 
     // Background sync without blocking user
     if (isOnline) {
@@ -597,18 +622,31 @@ export default function POSPage() {
                 <button
                   key={item.id}
                   onClick={() => handleProductClick(item)}
-                  className="bg-card border border-line rounded-xl overflow-hidden flex flex-col hover:border-gold hover:shadow-sm transition-all active:scale-95 text-left group"
+                  className={`bg-card border rounded-xl overflow-hidden flex flex-col hover:border-gold hover:shadow-sm transition-all active:scale-95 text-left group ${
+                    item.price === 0 ? 'border-[#3D6B50]/40' : 'border-line'
+                  }`}
                 >
                   <div className="w-full h-28 bg-stat border-b border-line flex items-center justify-center relative overflow-hidden text-side-text group-hover:opacity-90">
                     <div className="flex flex-col items-center opacity-40">
                       <ImageIcon size={28} />
                       <span className="text-[9px] mt-1.5 font-mono">{item.name}</span>
                     </div>
+                    {item.price === 0 && (
+                      <span className="absolute top-2 right-2 px-2 py-0.5 bg-[#3D6B50] text-white text-[9px] font-bold rounded-full shadow-xs">
+                        TESTER 1 PCS
+                      </span>
+                    )}
                   </div>
                   
                   <div className="p-3 w-full">
-                    <h3 className="text-xs font-bold text-ink mb-1 line-clamp-1">{item.name}</h3>
-                    <p className="text-gold font-mono font-bold text-xs">Rp {item.price.toLocaleString('id-ID')}</p>
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <h3 className="text-xs font-bold text-ink line-clamp-1">{item.name}</h3>
+                    </div>
+                    {item.price === 0 ? (
+                      <p className="text-[#3D6B50] dark:text-[#68B984] font-mono font-bold text-xs">Rp 0 (GRATIS)</p>
+                    ) : (
+                      <p className="text-gold font-mono font-bold text-xs">Rp {item.price.toLocaleString('id-ID')}</p>
+                    )}
                   </div>
                 </button>
               ))}
@@ -642,17 +680,57 @@ export default function POSPage() {
             </div>
           ) : (
             cart.map(c => (
-              <div key={c.id} className="bg-card border border-line rounded-lg p-3 flex gap-2.5 items-center">
+              <div key={c.id} className="bg-card border border-line rounded-lg p-3 flex gap-2.5 items-start">
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-xs font-bold text-ink truncate">{c.item.name}</h4>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <h4 className="text-xs font-bold text-ink truncate">{c.item.name}</h4>
+                    {c.isTester && (
+                      <span className="px-1.5 py-0.5 bg-[#3D6B50]/15 text-[#3D6B50] dark:text-[#68B984] text-[9px] font-bold rounded border border-[#3D6B50]/30">
+                        TESTER (GRATIS)
+                      </span>
+                    )}
+                  </div>
                   {c.selectedVariant && (
                     <span className="inline-block px-1.5 py-0.5 bg-gold-soft text-gold text-[9px] font-bold rounded mt-0.5 uppercase tracking-wider">
                       {c.selectedVariant.name}
                     </span>
                   )}
-                  <p className="text-gold font-mono text-xs font-bold mt-0.5">Rp {c.item.price.toLocaleString('id-ID')}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {c.isTester ? (
+                      <div className="flex items-center gap-1.5">
+                        {c.item.price > 0 && (
+                          <span className="text-side-text line-through font-mono text-[10px]">
+                            Rp {c.item.price.toLocaleString('id-ID')}
+                          </span>
+                        )}
+                        <span className="text-[#3D6B50] dark:text-[#68B984] font-mono text-xs font-bold">
+                          Rp 0 (FREE)
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-gold font-mono text-xs font-bold">
+                        Rp {c.item.price.toLocaleString('id-ID')}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Tombol Tester (Jika di-klik maka hasil Rp 0, jika tidak maka harga normal) */}
+                  <div className="mt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => toggleCartItemTester(c.id)}
+                      className={`text-[10px] px-2 py-0.5 rounded-md font-bold transition-all border ${
+                        c.isTester
+                          ? 'bg-[#3D6B50] text-white border-[#3D6B50] shadow-2xs'
+                          : 'bg-stat text-side-text hover:text-ink hover:border-gold border-line'
+                      }`}
+                    >
+                      {c.isTester ? '✓ Mode Tester Aktif (Rp 0)' : '🎁 Tombol Tester (Gratiskan)'}
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
+
+                <div className="flex items-center gap-2 pt-0.5">
                   <div className="flex items-center border border-line rounded-lg overflow-hidden h-8">
                     <button onClick={() => updateQty(c.id, -1)} className="w-8 h-full flex items-center justify-center bg-stat hover:bg-line text-ink">
                       <Minus size={13} />
@@ -707,34 +785,48 @@ export default function POSPage() {
 
           <div className="flex justify-between items-end">
             <span className="text-xs font-bold text-ink">Total Tagihan</span>
-            <span className="text-xl font-mono font-bold text-green">Rp {total.toLocaleString('id-ID')}</span>
+            <span className={`text-xl font-mono font-bold ${total === 0 ? 'text-[#3D6B50] dark:text-[#68B984]' : 'text-green'}`}>
+              Rp {total.toLocaleString('id-ID')}
+            </span>
           </div>
 
-          {/* Payment Methods */}
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <button 
-              onClick={() => setPaymentMethod('CASH')}
-              className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 transition-all text-xs ${paymentMethod === 'CASH' ? 'border-gold bg-gold-soft text-gold font-bold' : 'border-line text-side-text hover:bg-stat'}`}
-            >
-              CASH
-            </button>
-            <button 
-              onClick={() => setPaymentMethod('BANK')}
-              className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 transition-all text-xs ${paymentMethod === 'BANK' ? 'border-gold bg-gold-soft text-gold font-bold' : 'border-line text-side-text hover:bg-stat'}`}
-            >
-              BANK / QRIS
-            </button>
-          </div>
+          {/* Payment Methods (Hanya jika total > 0) */}
+          {total > 0 && (
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button 
+                onClick={() => setPaymentMethod('CASH')}
+                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 transition-all text-xs ${paymentMethod === 'CASH' ? 'border-gold bg-gold-soft text-gold font-bold' : 'border-line text-side-text hover:bg-stat'}`}
+              >
+                CASH
+              </button>
+              <button 
+                onClick={() => setPaymentMethod('BANK')}
+                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 transition-all text-xs ${paymentMethod === 'BANK' ? 'border-gold bg-gold-soft text-gold font-bold' : 'border-line text-side-text hover:bg-stat'}`}
+              >
+                BANK / QRIS
+              </button>
+            </div>
+          )}
 
           {/* Checkout Button */}
           <button 
-            disabled={cart.length === 0}
+            disabled={cart.length === 0 || isCheckingOut}
             onClick={handleCheckout}
             className={`w-full py-3.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 transition-transform active:scale-[0.98] ${
-              cart.length === 0 ? 'bg-line cursor-not-allowed' : 'bg-gold hover:bg-[#A38225]'
+              cart.length === 0 || isCheckingOut
+                ? 'bg-line cursor-not-allowed opacity-60' 
+                : total === 0 
+                  ? 'bg-[#3D6B50] hover:bg-[#325842] shadow-sm' 
+                  : 'bg-gold hover:bg-[#A38225]'
             }`}
           >
-            BAYAR SEKARANG
+            {isCheckingOut ? (
+              <span>Menyimpan Transaksi...</span>
+            ) : total === 0 ? (
+              <span>SIMPAN TRANSAKSI TESTER (RP 0)</span>
+            ) : (
+              <span>BAYAR SEKARANG</span>
+            )}
           </button>
         </div>
       </div>

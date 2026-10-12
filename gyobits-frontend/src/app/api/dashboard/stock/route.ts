@@ -14,7 +14,7 @@ export async function GET() {
       unitBase: string;
       displayUnit: string;
       currentStockQty: string;
-      minStockAlert: string | null;
+      minStockAlert?: string | null;
       currentStockValueRupiah: string;
       currentAvgCostRupiah?: string | null;
     }> = [];
@@ -33,7 +33,7 @@ export async function GET() {
           unitBase: i.unitBase,
           displayUnit: i.displayUnit,
           currentStockQty: i.currentStockQty,
-          minStockAlert: i.minStockAlert,
+          minStockAlert: i.minStockAlert ?? null,
           currentStockValueRupiah: i.currentStockValueRupiah,
           currentAvgCostRupiah: i.currentAvgCostRupiah,
         }));

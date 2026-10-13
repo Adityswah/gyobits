@@ -7,5 +7,12 @@
     "build": "npm run build --prefix gyobits-frontend",
     "start": "npm run start --prefix gyobits-frontend",
     "lint": "npm run lint --prefix gyobits-frontend"
+  },
+  "allowScripts": {
+    "esbuild@0.18.20": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true,
+    "unrs-resolver@1.12.2": true,
+    "core-js": false
   }
 }

@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS recipe_lines (
   id SERIAL PRIMARY KEY,
   recipe_id INT NOT NULL REFERENCES recipes(id),
   item_id INT NOT NULL REFERENCES items(id),
-  qty_per_basis NUMERIC(15,4) NOT NULL CHECK (qty_per_basis > 0),
+  qty_per_basis NUMERIC(15,4) NOT NULL CHECK (qty_per_basis >= 0),
   is_overhead BOOLEAN NOT NULL DEFAULT FALSE
 );
 
@@ -306,15 +306,84 @@ ON CONFLICT (username) DO NOTHING;
 INSERT INTO finance_categories (id, name, kind, is_system, is_active)
 VALUES
   (1, 'Penjualan Kasir', 'INCOME', true, true),
-  (2, 'Pendapatan Luar Usaha', 'INCOME', false, true),
-  (3, 'Pembelian Bahan Baku', 'EXPENSE', true, true),
-  (4, 'Biaya Pemasaran / Iklan', 'EXPENSE', false, true),
-  (5, 'Gaji Karyawan', 'EXPENSE', false, true),
-  (6, 'Sewa Tempat', 'EXPENSE', false, true),
-  (7, 'Loss Kerugian Produksi', 'EXPENSE', true, true),
-  (8, 'Operasional Lainnya', 'EXPENSE', false, true)
+  (2, 'Setoran Modal Pemilik / Kas Kecil', 'INCOME', false, true),
+  (3, 'Pendapatan Luar Usaha (Jual Limbah/Kardus)', 'INCOME', false, true),
+  (4, 'Bunga Bank / Jasa Giro', 'INCOME', false, true),
+  (5, 'Refund & Klaim Supplier', 'INCOME', false, true),
+  (6, 'Koreksi Selisih Kas Lebih', 'INCOME', false, true),
+  (7, 'Pembelian Bahan Baku', 'EXPENSE', true, true),
+  (8, 'Biaya Pemasaran / Iklan', 'EXPENSE', false, true),
+  (9, 'Gaji Karyawan', 'EXPENSE', false, true),
+  (10, 'Biaya Utilitas (Listrik, Air, Gas)', 'EXPENSE', false, true),
+  (11, 'Sewa Tempat', 'EXPENSE', false, true),
+  (12, 'Loss Kerugian Produksi', 'EXPENSE', true, true),
+  (13, 'Operasional Lainnya', 'EXPENSE', false, true)
 ON CONFLICT (name) DO NOTHING;
 
--- START FROM 0: Bersih dari dummy items, recipes, dan transactions
--- Data master barang, BOM, dan operasional akan dimasukkan manual dari UI aplikasi.
+-- 3. Master Items (Sesuai Gambar 1 Excel)
+INSERT INTO items (id, sku, name, category, stock_mode, unit_base, display_unit, display_factor, min_stock_alert, sell_price_rupiah, is_active)
+VALUES
+  (1, 'RAW-AYM-PTG', 'Ayam Potong', 'RAW_PROTEIN', 'STOCKED', 'g', 'G', 1, 1000, 40000, true),
+  (2, 'RAW-KLT-AYM', 'Kulit Ayam', 'RAW_PROTEIN', 'STOCKED', 'g', 'G', 1, 1000, 39000, true),
+  (3, 'RAW-TLR-BTR', 'Telur', 'RAW_PROTEIN', 'STOCKED', 'pcs', 'Butir', 1, 16, 30000, true),
+  (4, 'RAW-SWI-PTH', 'Sawi Putih', 'RAW_VEGETABLE', 'STOCKED', 'g', 'G', 1, 1000, 15000, true),
+  (5, 'RAW-DAN-PRE', 'Daun Pre', 'RAW_VEGETABLE', 'STOCKED', 'g', 'G', 1, 1000, 15000, true),
+  (6, 'RAW-DAN-BWG', 'Daun Bawang', 'RAW_VEGETABLE', 'STOCKED', 'g', 'G', 1, 1000, 20000, true),
+  (7, 'RAW-GBS-SAY', 'Gubis', 'RAW_VEGETABLE', 'STOCKED', 'g', 'G', 1, 1000, 10000, true),
+  (8, 'RAW-BWG-PTH', 'Bawang Putih', 'RAW_VEGETABLE', 'STOCKED', 'g', 'G', 1, 1000, 38000, true),
+  (9, 'RAW-JHE-SAY', 'Jahe', 'RAW_VEGETABLE', 'STOCKED', 'g', 'G', 1, 1000, 20000, true),
+  (10, 'RAW-KLD-JMR', 'Kaldu Jamur', 'RAW_DRY', 'STOCKED', 'g', 'G', 1, 400, 60000, true),
+  (11, 'RAW-MSG-MCN', 'MSG', 'RAW_DRY', 'STOCKED', 'g', 'G', 1, 1000, 58000, true),
+  (12, 'RAW-GRM-DPR', 'Garam', 'RAW_DRY', 'STOCKED', 'g', 'G', 1, 500, 75000, true),
+  (13, 'RAW-GLA-PSF', 'Gula', 'RAW_DRY', 'STOCKED', 'g', 'G', 1, 1000, 19000, true),
+  (14, 'RAW-SAS-TRM', 'Saos Tiram', 'RAW_DRY', 'STOCKED', 'ml', 'ML', 1, 270, 25000, true),
+  (15, 'RAW-MYK-WJN', 'Minyak Wijen', 'RAW_DRY', 'STOCKED', 'ml', 'ML', 1, 200, 70000, true),
+  (16, 'RAW-MYK-GRG', 'Minyak Goreng', 'RAW_DRY', 'STOCKED', 'ml', 'ML', 1, 2000, 22000, true),
+  (17, 'RAW-AIR-MNR', 'Air Mineral', 'RAW_DRY', 'STOCKED', 'ml', 'ML', 1, 15000, 8000, true),
+  (18, 'RAW-TPG-TPK', 'Tepung Tapioka', 'RAW_DRY', 'STOCKED', 'g', 'G', 1, 500, 16000, true),
+  (19, 'RAW-TPG-TRG', 'Tepung Terigu', 'RAW_DRY', 'STOCKED', 'g', 'G', 1, 500, 16000, true),
+  (20, 'RAW-TPG-BRS', 'Tepung Beras', 'RAW_DRY', 'STOCKED', 'g', 'G', 1, 500, 15000, true),
+  (21, 'RAW-KLT-GYO', 'Kulit Gyoza', 'RAW_DRY', 'STOCKED', 'pcs', 'Bks', 1, 1, 9000, true),
+  (22, 'YLD-AYM-FLT', 'Daging Ayam Filet', 'SEMI_FINISHED', 'STOCKED', 'g', 'G', 1, 1000, null, true),
+  (23, 'YLD-DAN-PRE', 'Daun Pre Bersih', 'SEMI_FINISHED', 'STOCKED', 'g', 'G', 1, 1000, null, true),
+  (24, 'YLD-DAN-BWG', 'Daun Bawang Bersih', 'SEMI_FINISHED', 'STOCKED', 'g', 'G', 1, 1000, null, true),
+  (25, 'YLD-SWI-PTH', 'Sawi Putih Bersih', 'SEMI_FINISHED', 'STOCKED', 'g', 'G', 1, 1000, null, true),
+  (26, 'YLD-BWG-PTH', 'Bawang Putih Bersih', 'SEMI_FINISHED', 'STOCKED', 'g', 'G', 1, 1000, null, true),
+  (27, 'SEM-GYO-MNT', 'Gyoza Mentah Siap Masak', 'SEMI_FINISHED', 'STOCKED', 'pcs', 'Pcs', 1, 50, null, true),
+  (28, 'POS-GYO-10', 'Gyoza Isi 10', 'FINISHED', 'STOCKED', 'pcs', 'Pcs', 1, 0, 25000, true),
+  (29, 'POS-GYO-8', 'Gyoza Isi 8', 'FINISHED', 'STOCKED', 'pcs', 'Pcs', 1, 0, 20000, true),
+  (30, 'POS-GYO-7', 'Gyoza Isi 7', 'FINISHED', 'STOCKED', 'pcs', 'Pcs', 1, 0, 20000, true),
+  (31, 'POS-GYO-FRZ-10', 'Gyoza Forze Isi 10', 'FINISHED', 'STOCKED', 'pcs', 'Pcs', 1, 0, 22500, true),
+  (32, 'POS-GYO-TST', 'Tester Gyoza', 'FINISHED', 'STOCKED', 'pcs', 'Pcs', 1, 0, 0, true),
+  (33, 'POS-CHL-OIL', 'Chili Oil', 'FINISHED', 'STOCKED', 'pcs', 'Pcs', 1, 0, 3000, true)
+ON CONFLICT (sku) DO NOTHING;
 
+SELECT setval('items_id_seq', (SELECT COALESCE(MAX(id), 33) FROM items));
+
+-- 4. Master BOM Recipe (Basic Output: 150 Pcs)
+INSERT INTO recipes (id, output_item_id, basis_qty, version, is_active)
+VALUES (1, 27, 150, 1, true)
+ON CONFLICT (output_item_id, version) DO UPDATE SET basis_qty = 150;
+
+DELETE FROM recipe_lines WHERE recipe_id = 1;
+INSERT INTO recipe_lines (id, recipe_id, item_id, qty_per_basis, is_overhead)
+VALUES
+  (1, 1, 22, 1000, false),
+  (2, 1, 23, 70, false),
+  (3, 1, 24, 70, false),
+  (4, 1, 25, 300, false),
+  (5, 1, 26, 80, false),
+  (6, 1, 18, 200, false),
+  (7, 1, 11, 0, false),
+  (8, 1, 13, 15, false),
+  (9, 1, 12, 10, false),
+  (10, 1, 10, 4, false),
+  (11, 1, 14, 10, false),
+  (12, 1, 15, 10, false),
+  (13, 1, 16, 50, false),
+  (14, 1, 3, 1, false),
+  (15, 1, 17, 50, false)
+ON CONFLICT (id) DO NOTHING;
+
+SELECT setval('recipes_id_seq', (SELECT COALESCE(MAX(id), 1) FROM recipes));
+SELECT setval('recipe_lines_id_seq', (SELECT COALESCE(MAX(id), 15) FROM recipe_lines));

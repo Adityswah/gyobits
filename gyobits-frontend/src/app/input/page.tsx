@@ -390,12 +390,14 @@ export default function InputPage() {
     }
   }, [recipes, items]);
 
-  // Saat output item diganti, coba otomatis load resep BOM
+  // Saat output item diganti, coba otomatis load resep BOM dengan Basis Output (150 Pcs)
   const handleOutputItemChange = (newItemId: number) => {
     setBatchOutputItemId(newItemId);
     const rec = recipes.find(r => r.outputItemId === newItemId);
     if (rec) {
-      applyRecipeBom(newItemId, qtyGood);
+      const defaultQty = qtyGood > 0 ? qtyGood : (Number(rec.basisQty) || 150);
+      if (qtyGood === 0) setQtyGood(defaultQty);
+      applyRecipeBom(newItemId, defaultQty);
     }
   };
 

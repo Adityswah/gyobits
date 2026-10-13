@@ -875,13 +875,13 @@ class InMemoryStore {
       { id: 13, name: 'Operasional Lainnya', kind: 'EXPENSE', isSystem: false, isActive: true },
     ];
 
-    // 3. BOM RESEP RESMI DARI EXCEL GAMBAR 1 (RESEP GYOZA PER BATCH: 1870 G)
+    // 3. BOM RESEP RESMI DARI EXCEL GAMBAR 1 (RESEP GYOZA PER BATCH: OUTPUT 150 PCS)
     this.recipes = [
       {
         id: 1,
         outputItemId: 27, // Gyoza Mentah Siap Masak
         outputItemName: 'Gyoza Mentah Siap Masak',
-        basisQty: '1870',
+        basisQty: '150',
         version: 1,
         isActive: true,
         lines: [
@@ -1049,7 +1049,12 @@ class InMemoryStore {
 const globalStore = (globalThis as unknown as { __stokaraStore?: InMemoryStore });
 if (!globalStore.__stokaraStore || typeof globalStore.__stokaraStore.deleteItem !== 'function') {
   globalStore.__stokaraStore = new InMemoryStore();
+} else {
+  Object.setPrototypeOf(globalStore.__stokaraStore, InMemoryStore.prototype);
+  if (globalStore.__stokaraStore.recipes?.[0]?.basisQty === '1870') {
+    globalStore.__stokaraStore.recipes[0].basisQty = '150';
+    globalStore.__stokaraStore.persist();
+  }
 }
-// DO NOT CALL resetToZero() ON MODULE RELOAD! That prevents data from disappearing!
 
 export const inMemoryStore = globalStore.__stokaraStore;

@@ -16,8 +16,8 @@
       "minStockAlert": "1000",
       "sellPriceRupiah": "40000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 2,
@@ -35,8 +35,8 @@
       "minStockAlert": "1000",
       "sellPriceRupiah": "39000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 3,
@@ -54,8 +54,8 @@
       "minStockAlert": "16",
       "sellPriceRupiah": "30000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 4,
@@ -73,8 +73,8 @@
       "minStockAlert": "1000",
       "sellPriceRupiah": "15000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 5,
@@ -92,8 +92,8 @@
       "minStockAlert": "1000",
       "sellPriceRupiah": "15000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 6,
@@ -111,8 +111,8 @@
       "minStockAlert": "1000",
       "sellPriceRupiah": "20000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 7,
@@ -130,8 +130,8 @@
       "minStockAlert": "1000",
       "sellPriceRupiah": "10000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 8,
@@ -149,8 +149,8 @@
       "minStockAlert": "1000",
       "sellPriceRupiah": "38000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 9,
@@ -168,8 +168,8 @@
       "minStockAlert": "1000",
       "sellPriceRupiah": "20000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 10,
@@ -187,8 +187,8 @@
       "minStockAlert": "400",
       "sellPriceRupiah": "60000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 11,
@@ -206,8 +206,8 @@
       "minStockAlert": "1000",
       "sellPriceRupiah": "58000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 12,
@@ -225,8 +225,8 @@
       "minStockAlert": "500",
       "sellPriceRupiah": "75000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 13,
@@ -244,8 +244,8 @@
       "minStockAlert": "1000",
       "sellPriceRupiah": "19000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 14,
@@ -263,8 +263,8 @@
       "minStockAlert": "270",
       "sellPriceRupiah": "25000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 15,
@@ -282,8 +282,8 @@
       "minStockAlert": "200",
       "sellPriceRupiah": "70000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 16,
@@ -301,8 +301,8 @@
       "minStockAlert": "2000",
       "sellPriceRupiah": "22000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 17,
@@ -320,8 +320,8 @@
       "minStockAlert": "15000",
       "sellPriceRupiah": "8000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 18,
@@ -339,8 +339,8 @@
       "minStockAlert": "500",
       "sellPriceRupiah": "16000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 19,
@@ -358,8 +358,8 @@
       "minStockAlert": "500",
       "sellPriceRupiah": "16000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 20,
@@ -377,8 +377,8 @@
       "minStockAlert": "500",
       "sellPriceRupiah": "15000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 21,
@@ -396,8 +396,8 @@
       "minStockAlert": "1",
       "sellPriceRupiah": "9000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 22,
@@ -414,8 +414,8 @@
       "oversold": false,
       "minStockAlert": "1000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 23,
@@ -432,8 +432,8 @@
       "oversold": false,
       "minStockAlert": "1000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 24,
@@ -450,8 +450,8 @@
       "oversold": false,
       "minStockAlert": "1000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 25,
@@ -468,8 +468,8 @@
       "oversold": false,
       "minStockAlert": "1000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 26,
@@ -486,8 +486,8 @@
       "oversold": false,
       "minStockAlert": "1000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 27,
@@ -504,8 +504,8 @@
       "oversold": false,
       "minStockAlert": "50",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 28,
@@ -522,8 +522,8 @@
       "oversold": false,
       "sellPriceRupiah": "25000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 29,
@@ -540,8 +540,8 @@
       "oversold": false,
       "sellPriceRupiah": "20000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 30,
@@ -558,8 +558,8 @@
       "oversold": false,
       "sellPriceRupiah": "20000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 31,
@@ -576,8 +576,8 @@
       "oversold": false,
       "sellPriceRupiah": "22500",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 32,
@@ -594,8 +594,8 @@
       "oversold": false,
       "sellPriceRupiah": "0",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     },
     {
       "id": 33,
@@ -612,8 +612,8 @@
       "oversold": false,
       "sellPriceRupiah": "3000",
       "isActive": true,
-      "createdAt": "2026-10-12T05:38:54.254Z",
-      "updatedAt": "2026-10-12T05:38:54.254Z"
+      "createdAt": "2026-10-13T02:52:54.098Z",
+      "updatedAt": "2026-10-13T02:52:54.098Z"
     }
   ],
   "categories": [
@@ -720,7 +720,7 @@
       "id": 1,
       "outputItemId": 27,
       "outputItemName": "Gyoza Mentah Siap Masak",
-      "basisQty": "1870",
+      "basisQty": "150",
       "version": 1,
       "isActive": true,
       "lines": [

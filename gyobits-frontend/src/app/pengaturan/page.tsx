@@ -82,8 +82,8 @@ export default function PengaturanPage() {
   // 3. BOM / Recipes State (START FROM 0: BERSIH TANPA DUMMY)
   const [recipes, setRecipes] = useState<RecipeRecord[]>([]);
   const [showBomModal, setShowBomModal] = useState(false);
-  const [bomOutputId, setBomOutputId] = useState<number>(0);
-  const [bomBasisQty, setBomBasisQty] = useState<number>(1);
+  const [bomOutputId, setBomOutputId] = useState<number>(27);
+  const [bomBasisQty, setBomBasisQty] = useState<number>(150);
   const [bomLines, setBomLines] = useState<Array<{ itemId: number; qty: number; unit: string }>>([]);
 
   // 4. Finance Categories State (Kategori Master Dipertahankan)
@@ -313,11 +313,11 @@ export default function PengaturanPage() {
 
   // Handlers - BOM Recipe
   const openAddBomModal = () => {
-    setBomOutputId(items[0]?.id || 7);
-    setBomBasisQty(100);
+    setBomOutputId(items.find(i => i.sku === 'SEM-GYO-MNT')?.id || items[0]?.id || 27);
+    setBomBasisQty(150);
     setBomLines([
-      { itemId: items[1]?.id || 5, qty: 2000, unit: 'g' },
-      { itemId: items[2]?.id || 6, qty: 100, unit: 'Pcs' }
+      { itemId: items[1]?.id || 22, qty: 1000, unit: 'G' },
+      { itemId: items[2]?.id || 25, qty: 300, unit: 'G' }
     ]);
     setShowBomModal(true);
   };
